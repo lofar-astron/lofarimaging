@@ -197,9 +197,8 @@ def get_background_image(lon_min, lon_max, lat_min, lat_max, zoom=19):
     pix_xmin = int(round(np.interp(lon_min, [total_lonlatmin['lon'], total_lonlatmax['lon']], [0, total_image.shape[1]])))
     pix_ymin = int(round(np.interp(lat_min, [total_lonlatmin['lat'], total_lonlatmax['lat']], [0, total_image.shape[0]])))
     pix_xmax = int(round(np.interp(lon_max, [total_lonlatmin['lon'], total_lonlatmax['lon']], [0, total_image.shape[1]])))
-    pix_ymax = int(round(np.interp(lat_max, [total_lonlatmin['lon'], total_lonlatmax['lon']], [0, total_image.shape[0]])))
-
-    return total_image[pix_ymin: pix_ymax, pix_xmin: pix_xmax]
+    pix_ymax = int(round(np.interp(lat_max, [total_lonlatmin['lat'], total_lonlatmax['lat']], [0, total_image.shape[0]])))
+    return total_image[total_image.shape[0]-pix_ymax: total_image.shape[0]-pix_ymin, pix_xmin: pix_xmax]
 
 
 SPEED_OF_LIGHT = 299792458.0
