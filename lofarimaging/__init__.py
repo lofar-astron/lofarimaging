@@ -230,9 +230,7 @@ def ground_imager(visibilities, baselines, freq, im_x, im_y, dims, station_pqr, 
                 r = height
                 pqr = np.array([p, q, r], dtype=np.float32)
                 antdist = np.linalg.norm(station_pqr - pqr[np.newaxis, :], axis=1)
-                groundbase = np.zeros([len(station_pqr), len(station_pqr)], dtype='float32')
-                for i in range(0, len(station_pqr)):
-                    groundbase[i] = antdist[i] - antdist[:]
+                groundbase = antdist[:, np.newaxis] - antdist[np.newaxis, :]
                 # Note: this is RFI integration second - normal second, to take out interference
                 img[q_ix, p_ix] = np.mean(visibilities * np.exp(-2j * np.pi * freq * (-groundbase) / SPEED_OF_LIGHT))
     return img
