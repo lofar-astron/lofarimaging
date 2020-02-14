@@ -1,10 +1,13 @@
 """Functions for working with LOFAR single station data"""
 
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
-           "rcus_in_station", "read_acm_cube"]
+           "rcus_in_station", "read_acm_cube", "get_background_image",
+           "sky_imager", "ground_imager", "get_extents_pqr"]
 
 import numpy as np
 import os
+from matplotlib.pyplot import imread
+import warnings
 
 
 def sb_from_freq(freq: float, clock=200.e6):
@@ -149,3 +152,109 @@ def read_acm_cube(filename: str, station_type: str):
     time_slots = int(len(data) / num_rcu / num_rcu)
     return data.reshape((time_slots, num_rcu, num_rcu))
 
+
+def get_background_image(lon_min, lon_max, lat_min, lat_max, zoom=19):
+    """
+    Get an ESRI World Imagery map of the selected region
+    Args:
+        lon_min: Minimum longitude (degrees)
+        lon_max: Maximum longitude (degrees)
+        lat_min: Minimum latitude (degrees)
+        lat_max: Maximum latitude (degrees)
+        zoom: Zoom level
+
+    Returns:
+        np.array: Numpy array which can be plotted with plt.imshow
+    """
+    from owslib.wmts import WebMapTileService
+    import mercantile
+
+    wmts = WebMapTileService("http://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml")
+
+    upperleft_tile = mercantile.tile(lon_min, lat_max, zoom)
+    xmin, ymin = upperleft_tile.x, upperleft_tile.y
+    lowerright_tile = mercantile.tile(lon_max, lat_min, zoom)
+    xmax, ymax = lowerright_tile.x, lowerright_tile.y
+
+    total_image = np.zeros([256 * (ymax - ymin + 1), 256 * (xmax - xmin + 1), 3], dtype='uint8')
+
+    tile_min = mercantile.tile(lon_min, lat_min, zoom)
+    tile_max = mercantile.tile(lon_max, lat_max, zoom)
+
+    for x in range(tile_min.x, tile_max.x + 1):
+        for y in range(tile_max.y, tile_min.y + 1):
+            tile = wmts.gettile(layer="World_Imagery", tilematrix=str(zoom), row=y, column=x)
+            out = open("tmp.jpg", "wb")
+            out.write(tile.read())
+            out.close()
+            tile_image = imread("tmp.jpg")
+            total_image[(y - ymin) * 256: (y - ymin + 1) * 256,
+                        (x - xmin) * 256: (x - xmin + 1) * 256] = tile_image
+
+    total_lonlatmin = {'lon': mercantile.bounds(xmin, ymax, zoom).west, 'lat': mercantile.bounds(xmin, ymax, zoom).south}
+    total_lonlatmax = {'lon': mercantile.bounds(xmax, ymin, zoom).east, 'lat': mercantile.bounds(xmax, ymin, zoom).north}
+
+    pix_xmin = int(round(np.interp(lon_min, [total_lonlatmin['lon'], total_lonlatmax['lon']], [0, total_image.shape[1]])))
+    pix_ymin = int(round(np.interp(lat_min, [total_lonlatmin['lat'], total_lonlatmax['lat']], [0, total_image.shape[0]])))
+    pix_xmax = int(round(np.interp(lon_max, [total_lonlatmin['lon'], total_lonlatmax['lon']], [0, total_image.shape[1]])))
+    pix_ymax = int(round(np.interp(lat_max, [total_lonlatmin['lon'], total_lonlatmax['lon']], [0, total_image.shape[0]])))
+
+    return total_image[pix_ymin: pix_ymax, pix_xmin: pix_xmax]
+
+
+SPEED_OF_LIGHT = 299792458.0
+
+
+def sky_imager(visibilities, baselines, freq, im_x, im_y):
+    """Do a Fourier transform for sky imaging"""
+    img = np.zeros([im_y, im_x], dtype=np.float32)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Casting complex values to real discards the imaginary part")
+        for m_ix, m in enumerate(np.linspace(-1, 1, im_x)):
+            for l_ix, l in enumerate(np.linspace(1, -1, im_y)):
+                img[m_ix, l_ix] = np.mean(visibilities *
+                                          np.exp(-2j * np.pi * freq *
+                                                 (baselines[:, :, 0] * l + baselines[:, :, 1] * m) / SPEED_OF_LIGHT))
+    return img
+
+
+def ground_imager(visibilities, baselines, freq, im_x, im_y, dims, station_pqr, height=1.5):
+    """Do a Fourier transform for ground imaging"""
+    img = np.zeros([im_y, im_x], dtype=np.float32)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Casting complex values to real discards the imaginary part")
+        for q_ix, q in enumerate(np.linspace(dims[2], dims[3], im_y)):
+            for p_ix, p in enumerate(np.linspace(dims[0], dims[1], im_x)):
+                r = height
+                pqr = np.array([p, q, r], dtype=np.float32)
+                antdist = np.linalg.norm(station_pqr - pqr[np.newaxis, :], axis=1)
+                groundbase = np.zeros([len(station_pqr), len(station_pqr)], dtype='float32')
+                for i in range(0, len(station_pqr)):
+                    groundbase[i] = antdist[i] - antdist[:]
+                # Note: this is RFI integration second - normal second, to take out interference
+                img[q_ix, p_ix] = np.mean(visibilities * np.exp(-2j * np.pi * freq * (-groundbase) / SPEED_OF_LIGHT))
+    return img
+
+
+def get_extents_pqr(rot_matrix, extents_localnorth, margin=5):
+    """
+    Get the extents of a rectangular grid in the PQR frame which contains the
+    entire extents in the localnorth frame.
+    A bit of margin is taken to accomodate for interpolation after rotation.
+
+    Args:
+        rot_matrix: rotation matrix from PQ to XY
+        extents_localnorth: extents in the form [xmin, xmax, ymin, ymax]
+        margin: pixels to add to accomodate for interpolation after rotation
+
+    Returns:
+        extents in the PQR frame, in the form [pmin, pmax, qmin, qmax]
+    """
+    [xmin, xmax, ymin, ymax] = extents_localnorth
+    pmin2, _ = rot_matrix @ [xmin, ymin]
+    _, qmin2 = rot_matrix @ [xmax, ymin]
+    pmax2, _ = rot_matrix @ [xmax, ymax]
+    _, qmax2 = rot_matrix @ [xmin, ymax]
+    return [pmin2 - margin, pmax2 + margin, qmin2 - margin, qmax2 + margin]
