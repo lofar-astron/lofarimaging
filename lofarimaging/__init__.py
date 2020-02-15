@@ -2,7 +2,7 @@
 
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_background_image",
-           "sky_imager", "ground_imager", "get_extents_pqr"]
+           "sky_imager", "ground_imager"]
 
 import numpy as np
 import os
@@ -204,28 +204,28 @@ def get_background_image(lon_min, lon_max, lat_min, lat_max, zoom=19):
 SPEED_OF_LIGHT = 299792458.0
 
 
-def sky_imager(visibilities, baselines, freq, im_x, im_y):
+def sky_imager(visibilities, baselines, freq, npix_l, npix_m):
     """Do a Fourier transform for sky imaging"""
-    img = np.zeros([im_y, im_x], dtype=np.float32)
+    img = np.zeros([npix_m, npix_l], dtype=np.float32)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Casting complex values to real discards the imaginary part")
-        for m_ix, m in enumerate(np.linspace(-1, 1, im_x)):
-            for l_ix, l in enumerate(np.linspace(1, -1, im_y)):
+        for m_ix, m in enumerate(np.linspace(-1, 1, npix_l)):
+            for l_ix, l in enumerate(np.linspace(1, -1, npix_m)):
                 img[m_ix, l_ix] = np.mean(visibilities *
                                           np.exp(-2j * np.pi * freq *
                                                  (baselines[:, :, 0] * l + baselines[:, :, 1] * m) / SPEED_OF_LIGHT))
     return img
 
 
-def ground_imager(visibilities, baselines, freq, im_x, im_y, dims, station_pqr, height=1.5):
+def ground_imager(visibilities, baselines, freq, npix_p, npix_q, dims, station_pqr, height=1.5):
     """Do a Fourier transform for ground imaging"""
-    img = np.zeros([im_y, im_x], dtype=np.float32)
+    img = np.zeros([npix_q, npix_q], dtype=np.float32)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Casting complex values to real discards the imaginary part")
-        for q_ix, q in enumerate(np.linspace(dims[2], dims[3], im_y)):
-            for p_ix, p in enumerate(np.linspace(dims[0], dims[1], im_x)):
+        for q_ix, q in enumerate(np.linspace(dims[2], dims[3], npix_q)):
+            for p_ix, p in enumerate(np.linspace(dims[0], dims[1], npix_p)):
                 r = height
                 pqr = np.array([p, q, r], dtype=np.float32)
                 antdist = np.linalg.norm(station_pqr - pqr[np.newaxis, :], axis=1)
@@ -233,25 +233,3 @@ def ground_imager(visibilities, baselines, freq, im_x, im_y, dims, station_pqr, 
                 # Note: this is RFI integration second - normal second, to take out interference
                 img[q_ix, p_ix] = np.mean(visibilities * np.exp(-2j * np.pi * freq * (-groundbase) / SPEED_OF_LIGHT))
     return img
-
-
-def get_extents_pqr(rot_matrix, extents_localnorth, margin=5):
-    """
-    Get the extents of a rectangular grid in the PQR frame which contains the
-    entire extents in the localnorth frame.
-    A bit of margin is taken to accomodate for interpolation after rotation.
-
-    Args:
-        rot_matrix: rotation matrix from PQ to XY
-        extents_localnorth: extents in the form [xmin, xmax, ymin, ymax]
-        margin: pixels to add to accomodate for interpolation after rotation
-
-    Returns:
-        extents in the PQR frame, in the form [pmin, pmax, qmin, qmax]
-    """
-    [xmin, xmax, ymin, ymax] = extents_localnorth
-    pmin2, _ = rot_matrix @ [xmin, ymin]
-    _, qmin2 = rot_matrix @ [xmax, ymin]
-    pmax2, _ = rot_matrix @ [xmax, ymax]
-    _, qmax2 = rot_matrix @ [xmin, ymax]
-    return [pmin2 - margin, pmax2 + margin, qmin2 - margin, qmax2 + margin]
