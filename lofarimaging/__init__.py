@@ -220,7 +220,7 @@ def sky_imager(visibilities, baselines, freq, npix_l, npix_m):
 
 def ground_imager(visibilities, baselines, freq, npix_p, npix_q, dims, station_pqr, height=1.5):
     """Do a Fourier transform for ground imaging"""
-    img = np.zeros([npix_p, npix_q], dtype=np.float32)
+    img = np.zeros([npix_q, npix_p], dtype=np.float32)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Casting complex values to real discards the imaginary part")
