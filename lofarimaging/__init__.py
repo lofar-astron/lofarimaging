@@ -9,11 +9,8 @@ __version__ = "1.5.0"
 import numpy as np
 import os
 from matplotlib.pyplot import imread
-import warnings
-import sys
-import time
+import folium
 import datetime
-import glob
 import lofargeotiff
 
 from scipy import ndimage
@@ -482,4 +479,21 @@ def make_ground_image(xst_filename,
                                (outer_pmin, outer_qmin), (outer_pmax, outer_qmax), stationname=station_name,
                                obsdate=obsdate, tags=tags)
 
+    m = folium.Map(location=[lat_center, lon_center], zoom_start=19,
+                   tiles='http://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/MapServer/tile/{z}/{y}/{x}',
+                   attr='ESRI')
+    folium.TileLayer(tiles="OpenStreetMap").add_to(m)
 
+    folium.raster_layers.ImageOverlay(
+            name='Near field image',
+            image=f"results/{fname}_nearfield_calibrated_noaxes.png",
+            bounds=[[outer_lat_min, outer_lon_min], [outer_lat_max, outer_lon_max]],
+            opacity=0.6,
+            interactive=True,
+            cross_origin=False,
+            zindex=1
+    ).add_to(m)
+
+    folium.LayerControl().add_to(m)
+
+    return m
