@@ -24,6 +24,10 @@ import warnings
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.axes as maxes
 
+from astropy.coordinates import SkyCoord, FK5, EarthLocation, AltAz, SkyOffsetFrame, CartesianRepresentation, get_sun
+import astropy.units as u
+from astropy.time import Time
+
 import lofarantpos
 from packaging import version
 assert(version.parse(lofarantpos.__version__) >= version.parse("0.4.0"))
@@ -59,6 +63,28 @@ def freq_from_sb(sb: int, clock=200e6):
     chan = 0.5 * clock / 512.
     freq = (sb * chan)
     return freq
+
+
+def skycoord_to_lmn(pos: SkyCoord, phasecentre: SkyCoord):
+    """
+    Convert astropy sky coordinates into the l,m,n coordinate system
+    relative to a phase centre.
+
+    The l,m,n is a RHS coordinate system with
+    * its origin on the sky sphere
+    * m,n and the celestial north on the same plane
+    * l,m a tangential plane of the sky sphere
+
+    Note that this means that l increases east-wards
+    """
+
+    # Determine relative sky position
+    todc = pos.transform_to(SkyOffsetFrame(origin=phasecentre))
+    dc = todc.represent_as(CartesianRepresentation)
+
+    # Do coordinate transformation - astropy's relative coordinates do
+    # not quite follow imaging conventions
+    return dc.y.value, dc.z.value, dc.x.value - 1
 
 
 def find_caltable(field_name: str, rcu_mode: str, config_dir='caltables'):
@@ -356,6 +382,15 @@ def make_ground_image(xst_filename,
     img = sky_imager(visibilities, baselines, freq, npix_l, npix_m)
     img = ndimage.interpolation.rotate(img, -rotation, reshape=False, mode='nearest')
 
+    # Determine positions of Cas A and Cyg A
+    station_earthlocation = EarthLocation.from_geocentric(*(db.phase_centres[station_name] * u.m))
+    zenith = AltAz(az=0 * u.deg, alt=90 * u.deg, obstime=obsdate,
+                   location=station_earthlocation).transform_to(FK5)
+    casA = SkyCoord(ra=350.85*u.deg, dec=58.815*u.deg)
+    cygA = SkyCoord(ra=299.868*u.deg, dec=40.734*u.deg)
+    casA_lmn = skycoord_to_lmn(casA, zenith)
+    cygA_lmn = skycoord_to_lmn(cygA, zenith)
+
     # Plot the resulting sky image
     fig, ax = plt.subplots(1)
 
@@ -366,11 +401,14 @@ def make_ground_image(xst_filename,
                      clip_path=circle1, clip_on=True, vmin=sky_vmin, vmax=sky_vmax)
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.2, axes_class=maxes.Axes)
-    fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.2e")
+    fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.1e")
 
     # Labels
     ax.set_xlabel('$ℓ$', fontsize=14)
     ax.set_ylabel('$m$', fontsize=14)
+
+    ax.annotate("Cas A", (-casA_lmn[0], casA_lmn[1]))
+    ax.annotate("Cyg A", (-cygA_lmn[0], cygA_lmn[1]))
 
     ax.set_title(f"Sky image for {station_name}\nSB {subband} ({freq / 1e6:.1f} MHz), {str(obsdate)[:16]}", fontsize=16)
 
@@ -379,8 +417,6 @@ def make_ground_image(xst_filename,
     ax.text(-0.9, 0, 'E', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
     ax.text(0, 0.9, 'N', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
     ax.text(0, -0.9, 'S', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
-
-    ax.grid(True, alpha=0.3)
 
     plt.savefig(f'results/{fname}_sky_calibrated.png', bbox_inches='tight', dpi=200)
     plt.close(fig)
@@ -422,12 +458,12 @@ def make_ground_image(xst_filename,
     outer_lon_min, outer_lat_min, _ = lofargeotiff.pqr_to_longlatheight([outer_pmin, outer_qmin, 0], station_name)
     outer_lon_max, outer_lat_max, _ = lofargeotiff.pqr_to_longlatheight([outer_pmax, outer_qmax, 0], station_name)
 
-    background_image = get_background_image(lon_min, lon_max, lat_min, lat_max, 19)
+    background_image = get_background_image(lon_min, lon_max, lat_min, lat_max)
 
-    # Make colors semi-transparent in the lower half of the scale
+    # Make colors semi-transparent in the lower 3/4 of the scale
     cmap = cm.Spectral_r
     cmap_with_alpha = cmap(np.arange(cmap.N))
-    cmap_with_alpha[:, -1] = np.clip(np.linspace(0, 2, cmap.N), 0., 1.)
+    cmap_with_alpha[:, -1] = np.clip(np.linspace(0, 1.5, cmap.N), 0., 1.)
     cmap_with_alpha = ListedColormap(cmap_with_alpha)
 
     # Plot the resulting image
@@ -439,7 +475,7 @@ def make_ground_image(xst_filename,
 
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.2, axes_class=maxes.Axes)
-    cbar = fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.0e")
+    cbar = fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.1e")
     cbar.set_alpha(1.0)
     cbar.draw_all()
     # cbar.set_ticks([])
