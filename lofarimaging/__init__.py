@@ -4,10 +4,32 @@ __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_background_image",
            "sky_imager", "ground_imager"]
 
+__version__ = "1.5.0"
+
 import numpy as np
 import os
 from matplotlib.pyplot import imread
 import warnings
+import sys
+import time
+import datetime
+import glob
+import lofargeotiff
+
+from scipy import ndimage
+
+from lofarantpos.db import LofarAntennaDatabase
+
+import matplotlib.pyplot as plt
+from matplotlib import cm
+from matplotlib.colors import ListedColormap
+import warnings
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.axes as maxes
+
+import lofarantpos
+from packaging import version
+assert(version.parse(lofarantpos.__version__) >= version.parse("0.4.0"))
 
 
 def sb_from_freq(freq: float, clock=200.e6):
@@ -42,14 +64,14 @@ def freq_from_sb(sb: int, clock=200e6):
     return freq
 
 
-def find_caltable(field_name: str, rcu_mode: int, config_dir='caltables'):
+def find_caltable(field_name: str, rcu_mode: str, config_dir='caltables'):
     """
     Find the file of a caltable.
 
     Args:
         field_name: Name of the antenna field, e.g. 'DE602LBA'
         rcu_mode: Receiver mode for which the calibration table is requested.
-            An integer from 1 to 7 inclusive.
+            Probably should be  'inner' or 'outer'
         config_dir: Root directory under which station information is stored in
             subdirectories DE602C/etc/, RS106/etc/, ...
 
@@ -233,3 +255,231 @@ def ground_imager(visibilities, baselines, freq, npix_p, npix_q, dims, station_p
                 # Note: this is RFI integration second - normal second, to take out interference
                 img[q_ix, p_ix] = np.mean(visibilities * np.exp(-2j * np.pi * freq * (-groundbase) / SPEED_OF_LIGHT))
     return img
+
+
+def make_ground_image(xst_filename,
+                      station_name,
+                      station_type,
+                      caltable_dir,
+                      extent=None,
+                      pixels_per_metre=0.5,
+                      sky_vmin=None,
+                      sky_vmax=None,
+                      ground_vmin=None,
+                      ground_vmax=None):
+    """Make a ground image"""
+    cubename = os.path.basename(xst_filename)
+
+    if extent is None:
+        extent = [-150, 150, -150, 150]
+
+    try:
+        os.mkdir('results')
+    except FileExistsError:
+        pass
+
+    # Distill metadata from filename
+    obsdatestr, obstime, _, stationtype, _, subbandname = cubename.rstrip(".dat").split("_")
+    subband = int(subbandname[2:])
+
+    # Needed for NL stations: inner (mode 3/4), outer (mode 1/2), (sparse tbd)
+    # Should be set to 'inner' if station type = 'intl'
+    atype = None
+    if stationtype in ('1', '2'):
+        atype = 'outer'
+    elif stationtype in ('3', '4'):
+        atype = 'inner'
+    else:
+        raise Exception("Unexpected mode: ", stationtype)
+
+    # Get the data
+    fname = f"{obsdatestr}_{obstime}_{station_name}_SB{subband}"
+
+    npix_l, npix_m = 101, 101
+    freq = freq_from_sb(subband)
+
+    # Which slice in time to visualise
+    timestep = 0
+
+    # For ground imaging
+    height = 1.5  # metres
+    ground_resolution = pixels_per_metre  # pixels per metre for ground_imaging, default is 0.5 pixel/metre
+
+    obsdate = datetime.datetime.strptime(obsdatestr + ":" + obstime, '%Y%m%d:%H%M%S')
+
+    cube = read_acm_cube(xst_filename, station_type)
+
+    # Apply calibration
+
+    caltable_filename = find_caltable(station_name, rcu_mode=atype,
+                                      config_dir=caltable_dir)
+
+    if caltable_filename is None:
+        print('No calibration table found... cube remains uncalibrated!')
+    else:
+        cal_header, cal_data = read_caltable(caltable_filename)
+
+        rcu_gains = cal_data[subband, :]
+        rcu_gains = np.array(rcu_gains, dtype=np.complex64)
+        gain_matrix = rcu_gains[np.newaxis, :] * np.conj(rcu_gains[:, np.newaxis])
+        cube = cube / gain_matrix
+
+    # Split into the XX and YY polarisations (RCUs)
+    # This needs to be modified in future for LBA sparse
+    cube_xx = cube[:, 0::2, 0::2]
+    cube_yy = cube[:, 1::2, 1::2]
+    visibilities_all = cube_xx + cube_yy
+
+    # Stokes I for specified timestep
+    visibilities = visibilities_all[timestep]
+
+    # Setup the database
+    db = LofarAntennaDatabase()
+
+    # Get the PQR positions for an individual station
+    station_pqr = db.antenna_pqr(station_name)
+
+    # Exception: for Dutch stations (sparse not yet accommodated)
+    if (station_type == 'core' or station_type == 'remote') and atype == 'inner':
+        station_pqr = station_pqr[0:48, :]
+    elif (station_type == 'core' or station_type == 'remote') and atype == 'outer':
+        station_pqr = station_pqr[48:, :]
+
+    station_pqr = station_pqr.astype('float32')
+
+    baselines = station_pqr[:, np.newaxis, :] - station_pqr[np.newaxis, :, :]
+
+    rotation = np.rad2deg(db.rotation_from_north(station_name))
+
+    # Make a sky image, by numerically Fourier-transforming from visibilities to image plane
+    from matplotlib.patches import Circle
+
+    # Fourier transform, and account for the rotation (rotation is positive in this space)
+    # visibilities = cube_xx[2,:,:]
+    img = sky_imager(visibilities, baselines, freq, npix_l, npix_m)
+    img = ndimage.interpolation.rotate(img, -rotation, reshape=False, mode='nearest')
+
+    # Plot the resulting sky image
+    fig, ax = plt.subplots(1)
+
+    circle1 = Circle((0, 0), 1.0, edgecolor='k', fill=False, facecolor='none', alpha=0.3)
+    ax.add_artist(circle1)
+
+    cimg = ax.imshow(img, origin='lower', cmap=cm.Spectral_r, extent=(-1, 1, -1, 1),
+                     clip_path=circle1, clip_on=True, vmin=sky_vmin, vmax=sky_vmax)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.2, axes_class=maxes.Axes)
+    fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.2e")
+
+    # Labels
+    ax.set_xlabel('$ℓ$', fontsize=14)
+    ax.set_ylabel('$m$', fontsize=14)
+
+    ax.set_title(f"Sky image for {station_name}\nSB {subband} ({freq / 1e6:.1f} MHz), {str(obsdate)[:16]}", fontsize=16)
+
+    # Plot the compass directions
+    ax.text(0.9, 0, 'W', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
+    ax.text(-0.9, 0, 'E', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
+    ax.text(0, 0.9, 'N', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
+    ax.text(0, -0.9, 'S', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
+
+    ax.grid(True, alpha=0.3)
+
+    plt.savefig(f'results/{fname}_sky_calibrated.png', bbox_inches='tight', dpi=200)
+    plt.close(fig)
+
+    from shapely import affinity, geometry
+
+    def extent_from_shapely(minx, miny, maxx, maxy):
+        return minx, maxx, miny, maxy
+
+    def extent_to_shapely(minx, maxx, miny, maxy):
+        return minx, miny, maxx, maxy
+
+    to_plot_xyz = affinity.rotate(
+            affinity.rotate(
+                    geometry.box(*extent_to_shapely(*extent)),
+                    rotation, origin=(0, 0)).envelope,
+            -rotation, origin=(0, 0))
+
+    to_plot_pqr = db.pqr_to_localnorth(station_name)[:2, :2].T @ (np.asarray(to_plot_xyz.exterior.coords[:4])).T
+    extent_pqr = (np.min(to_plot_pqr[0, :]), np.max(to_plot_pqr[0, :]), np.min(to_plot_pqr[1, :]), np.max(to_plot_pqr[1, :]))
+
+    npix_p, npix_q = int(ground_resolution * (extent[1] - extent[0])), int(ground_resolution * (extent[3] - extent[2]))
+
+    img = ground_imager(visibilities, baselines, freq, npix_p, npix_q, extent_pqr, station_pqr, height=height)
+    img_rotated = ndimage.interpolation.rotate(img, rotation, mode='constant', cval=np.nan)
+
+    outer_extent_xyz = extent_from_shapely(*(to_plot_xyz.envelope.bounds))  # Extent in xyz coordinates of the rotated image.
+
+    # Convert bottom left and upper right to PQR just for lofargeo
+    pmin, qmin, _ = db.pqr_to_localnorth(station_name).T @ (np.array([extent[0], extent[2], 0]))
+    pmax, qmax, _ = db.pqr_to_localnorth(station_name).T @ (np.array([extent[1], extent[3], 0]))
+    lon_center, lat_center, _ = lofargeotiff.pqr_to_longlatheight([0, 0, 0], station_name)
+    lon_min, lat_min, _ = lofargeotiff.pqr_to_longlatheight([pmin, qmin, 0], station_name)
+    lon_max, lat_max, _ = lofargeotiff.pqr_to_longlatheight([pmax, qmax, 0], station_name)
+
+    # Convert bottom left and upper right to PQR just for lofargeo
+    outer_pmin, outer_qmin, _ = db.pqr_to_localnorth(station_name).T @ (np.array([outer_extent_xyz[0], outer_extent_xyz[2], 0]))
+    outer_pmax, outer_qmax, _ = db.pqr_to_localnorth(station_name).T @ (np.array([outer_extent_xyz[1], outer_extent_xyz[3], 0]))
+    outer_lon_min, outer_lat_min, _ = lofargeotiff.pqr_to_longlatheight([outer_pmin, outer_qmin, 0], station_name)
+    outer_lon_max, outer_lat_max, _ = lofargeotiff.pqr_to_longlatheight([outer_pmax, outer_qmax, 0], station_name)
+
+    background_image = get_background_image(lon_min, lon_max, lat_min, lat_max, 19)
+
+    # Make colors semi-transparent in the lower half of the scale
+    cmap = cm.Spectral_r
+    cmap_with_alpha = cmap(np.arange(cmap.N))
+    cmap_with_alpha[:, -1] = np.clip(np.linspace(0, 2, cmap.N), 0., 1.)
+    cmap_with_alpha = ListedColormap(cmap_with_alpha)
+
+    # Plot the resulting image
+    fig = plt.figure(figsize=(10, 10), constrained_layout=True)
+    ax = fig.add_subplot(111, ymargin=-0.4)
+    ax.imshow(background_image, extent=extent)
+    cimg = ax.imshow(img_rotated, origin='lower', cmap=cmap_with_alpha, extent=outer_extent_xyz,
+                     alpha=0.7, vmin=ground_vmin, vmax=ground_vmax)
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.2, axes_class=maxes.Axes)
+    cbar = fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.0e")
+    cbar.set_alpha(1.0)
+    cbar.draw_all()
+    # cbar.set_ticks([])
+
+    ax.set_xlabel('$W-E$ (metres)', fontsize=14)
+    ax.set_ylabel('$S-N$ (metres)', fontsize=14)
+
+    ax.set_title(f"Near field image for {station_name}\nSB {subband} ({freq / 1e6:.1f} MHz), {str(obsdate)[:16]}", fontsize=16)
+
+    # Change limits to match the original specified extent in the localnorth frame
+    ax.set_xlim(extent[0], extent[1])
+    ax.set_ylim(extent[2], extent[3])
+    ax.tick_params(axis='both', which='both', length=0)
+
+    # Place the NSEW coordinate directions
+    ax.text(0.95, 0.5, 'E', color='w', fontsize=18, transform=ax.transAxes, horizontalalignment='center', verticalalignment='center')
+    ax.text(0.05, 0.5, 'W', color='w', fontsize=18, transform=ax.transAxes, horizontalalignment='center', verticalalignment='center')
+    ax.text(0.5, 0.95, 'N', color='w', fontsize=18, transform=ax.transAxes, horizontalalignment='center', verticalalignment='center')
+    ax.text(0.5, 0.05, 'S', color='w', fontsize=18, transform=ax.transAxes, horizontalalignment='center', verticalalignment='center')
+
+    ground_vmin_img, ground_vmax_img = cimg.get_clim()
+    ax.contour(img_rotated, np.linspace(ground_vmin_img, ground_vmax_img, 15), origin='lower', cmap=cm.Greys,
+               extent=outer_extent_xyz, linewidths=0.5, alpha=0.7)
+    ax.grid(True, alpha=0.3)
+    plt.savefig(f"results/{fname}_nearfield_calibrated.png", bbox_inches='tight', dpi=200)
+    plt.close(fig)
+
+    plt.imsave(f"results/{fname}_nearfield_calibrated_noaxes.png", img_rotated,
+               cmap=cmap_with_alpha, origin='lower', vmin=ground_vmin, vmax=ground_vmax)
+
+    obsdate = datetime.datetime.strptime(obsdatestr + ":" + obstime, '%Y%m%d:%H%M%S')
+
+    tags = {"datafile": xst_filename,
+            "generated_with": f"lofarimaging v{__version__}",
+            "caltable": caltable_filename}
+    lofargeotiff.write_geotiff(img_rotated, f"results/{fname}_nearfield_calibrated.tiff",
+                               (outer_pmin, outer_qmin), (outer_pmax, outer_qmax), stationname=station_name,
+                               obsdate=obsdate, tags=tags)
+
+
