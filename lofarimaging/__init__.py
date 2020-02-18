@@ -510,7 +510,7 @@ def make_ground_image(xst_filename,
     plt.savefig(f"results/{fname}_nearfield_calibrated.png", bbox_inches='tight', dpi=200)
     plt.close(fig)
 
-    plt.imsave(f"results/{fname}_nearfield_calibrated_noaxes.png", img_rotated,
+    plt.imsave(f"results/tmp.png", img_rotated,
                cmap=cmap_with_alpha, origin='lower', vmin=ground_vmin, vmax=ground_vmax)
 
     obsdate = datetime.datetime.strptime(obsdatestr + ":" + obstime, '%Y%m%d:%H%M%S')
@@ -534,7 +534,7 @@ def make_ground_image(xst_filename,
 
     folium.raster_layers.ImageOverlay(
             name='Near field image',
-            image=f"results/{fname}_nearfield_calibrated_noaxes.png",
+            image=f"results/tmp.png",
             bounds=[[outer_lat_min, outer_lon_min], [outer_lat_max, outer_lon_max]],
             opacity=0.6,
             interactive=True,
