@@ -282,7 +282,6 @@ def ground_imager(visibilities, baselines, freq, npix_p, npix_q, dims, station_p
 
 def make_ground_image(xst_filename,
                       station_name,
-                      station_type,
                       caltable_dir,
                       extent=None,
                       pixels_per_metre=0.5,
@@ -290,6 +289,7 @@ def make_ground_image(xst_filename,
                       sky_vmax=None,
                       ground_vmin=None,
                       ground_vmax=None,
+                      height=1.5,
                       map_zoom=19):
     """Make a ground image"""
     cubename = os.path.basename(xst_filename)
@@ -297,24 +297,31 @@ def make_ground_image(xst_filename,
     if extent is None:
         extent = [-150, 150, -150, 150]
 
+    if station_name[0] == "C":
+        station_type = "core"
+    elif station_name[0] == "R" or station_name[:5] == "PL611":
+        station_type = "remote"
+    else:
+        station_type = "intl"
+
     try:
         os.mkdir('results')
     except FileExistsError:
         pass
 
     # Distill metadata from filename
-    obsdatestr, obstime, _, stationtype, _, subbandname = cubename.rstrip(".dat").split("_")
+    obsdatestr, obstime, _, mode, _, subbandname = cubename.rstrip(".dat").split("_")
     subband = int(subbandname[2:])
 
     # Needed for NL stations: inner (mode 3/4), outer (mode 1/2), (sparse tbd)
     # Should be set to 'inner' if station type = 'intl'
-    atype = None
-    if stationtype in ('1', '2'):
-        atype = 'outer'
-    elif stationtype in ('3', '4'):
-        atype = 'inner'
+    array_type = None
+    if mode in ('1', '2'):
+        array_type = 'outer'
+    elif mode in ('3', '4'):
+        array_type = 'inner'
     else:
-        raise Exception("Unexpected mode: ", stationtype)
+        raise Exception("Unexpected mode: ", mode)
 
     # Get the data
     fname = f"{obsdatestr}_{obstime}_{station_name}_SB{subband}"
@@ -326,7 +333,6 @@ def make_ground_image(xst_filename,
     timestep = 0
 
     # For ground imaging
-    height = 1.5  # metres
     ground_resolution = pixels_per_metre  # pixels per metre for ground_imaging, default is 0.5 pixel/metre
 
     obsdate = datetime.datetime.strptime(obsdatestr + ":" + obstime, '%Y%m%d:%H%M%S')
@@ -335,7 +341,7 @@ def make_ground_image(xst_filename,
 
     # Apply calibration
 
-    caltable_filename = find_caltable(station_name, rcu_mode=atype,
+    caltable_filename = find_caltable(station_name, rcu_mode=array_type,
                                       config_dir=caltable_dir)
 
     if caltable_filename is None:
@@ -364,9 +370,9 @@ def make_ground_image(xst_filename,
     station_pqr = db.antenna_pqr(station_name)
 
     # Exception: for Dutch stations (sparse not yet accommodated)
-    if (station_type == 'core' or station_type == 'remote') and atype == 'inner':
+    if (station_type == 'core' or station_type == 'remote') and array_type == 'inner':
         station_pqr = station_pqr[0:48, :]
-    elif (station_type == 'core' or station_type == 'remote') and atype == 'outer':
+    elif (station_type == 'core' or station_type == 'remote') and array_type == 'outer':
         station_pqr = station_pqr[48:, :]
 
     station_pqr = station_pqr.astype('float32')
@@ -515,6 +521,7 @@ def make_ground_image(xst_filename,
             "subband": subband,
             "frequency": freq,
             "extent_xyz": extent,
+            "height": height,
             "outer_extent_xyz": list(outer_extent_xyz)}
     lofargeotiff.write_geotiff(img_rotated, f"results/{fname}_nearfield_calibrated.tiff",
                                (outer_pmin, outer_qmin), (outer_pmax, outer_qmax), stationname=station_name,
