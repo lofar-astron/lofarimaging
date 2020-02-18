@@ -511,7 +511,11 @@ def make_ground_image(xst_filename,
 
     tags = {"datafile": xst_filename,
             "generated_with": f"lofarimaging v{__version__}",
-            "caltable": caltable_filename}
+            "caltable": caltable_filename,
+            "subband": subband,
+            "frequency": freq,
+            "extent_xyz": extent,
+            "outer_extent_xyz": list(outer_extent_xyz)}
     lofargeotiff.write_geotiff(img_rotated, f"results/{fname}_nearfield_calibrated.tiff",
                                (outer_pmin, outer_qmin), (outer_pmax, outer_qmax), stationname=station_name,
                                obsdate=obsdate, tags=tags)
