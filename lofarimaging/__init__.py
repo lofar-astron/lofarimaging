@@ -289,7 +289,8 @@ def make_ground_image(xst_filename,
                       sky_vmin=None,
                       sky_vmax=None,
                       ground_vmin=None,
-                      ground_vmax=None):
+                      ground_vmax=None,
+                      map_zoom=19):
     """Make a ground image"""
     cubename = os.path.basename(xst_filename)
 
@@ -458,7 +459,7 @@ def make_ground_image(xst_filename,
     outer_lon_min, outer_lat_min, _ = lofargeotiff.pqr_to_longlatheight([outer_pmin, outer_qmin, 0], station_name)
     outer_lon_max, outer_lat_max, _ = lofargeotiff.pqr_to_longlatheight([outer_pmax, outer_qmax, 0], station_name)
 
-    background_image = get_background_image(lon_min, lon_max, lat_min, lat_max)
+    background_image = get_background_image(lon_min, lon_max, lat_min, lat_max, zoom=map_zoom)
 
     # Make colors semi-transparent in the lower 3/4 of the scale
     cmap = cm.Spectral_r
