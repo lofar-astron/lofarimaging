@@ -31,7 +31,7 @@ import warnings
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.axes as maxes
 
-from astropy.coordinates import SkyCoord, ICRS, EarthLocation, AltAz, SkyOffsetFrame, CartesianRepresentation, get_sun
+from astropy.coordinates import SkyCoord, ICRS, EarthLocation, AltAz, SkyOffsetFrame, CartesianRepresentation, get_sun, get_moon
 import astropy.units as u
 from astropy.time import Time
 
@@ -95,6 +95,7 @@ def skycoord_to_lmn(pos: SkyCoord, phasecentre: SkyCoord):
     # Determine relative sky position
     todc = pos.transform_to(SkyOffsetFrame(origin=phasecentre))
     dc = todc.represent_as(CartesianRepresentation)
+    dc /= dc.norm()
 
     # Do coordinate transformation - astropy's relative coordinates do
     # not quite follow imaging conventions
@@ -424,12 +425,15 @@ def make_ground_image(xst_filename,
         'Cyg A': SkyCoord(ra=299.868*u.deg, dec=40.734*u.deg),
         'Per A': SkyCoord.from_name("Perseus A"),
         'Her A': SkyCoord.from_name("Hercules A"),
-        'Cen A': SkyCoord.from_name("Centaurus A")
+        'Cen A': SkyCoord.from_name("Centaurus A"),
+        '3C295': SkyCoord.from_name("3C295"),
+        'Moon': get_moon(Time(obstime), location=station_earthlocation).transform_to(ICRS),
+        '3C196': SkyCoord.from_name("3C196")
     }
 
     marked_bodies_lmn = {}
     for body_name, body_coord in marked_bodies.items():
-        #print(body_name, body_coord.separation(zenith))
+        #print(body_name, body_coord.separation(zenith), body_coord.separation(zenith))
         if body_coord.separation(zenith) > 0:
             marked_bodies_lmn[body_name] = skycoord_to_lmn(marked_bodies[body_name], zenith)
 
