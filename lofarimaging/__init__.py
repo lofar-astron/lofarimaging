@@ -24,6 +24,7 @@ from scipy import ndimage
 from lofarantpos.db import LofarAntennaDatabase
 
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FormatStrFormatter
 from matplotlib import cm
 from matplotlib.colors import ListedColormap
 import warnings
@@ -443,6 +444,11 @@ def make_ground_image(xst_filename,
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.2, axes_class=maxes.Axes)
     fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.1e")
+
+    ax.set_xticks(np.arange(-1, 1.1, 0.5))
+    ax.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+    ax.set_yticks(np.arange(-1, 1.1, 0.5))
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
     # Labels
     ax.set_xlabel('$ℓ$', fontsize=14)
