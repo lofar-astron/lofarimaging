@@ -6,6 +6,12 @@ __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
 
 __version__ = "1.5.0"
 
+# Configurations for HBA observations with a single dipole activated per tile.
+GENERIC_INT_201512 = [0, 5, 3, 1, 8, 3, 12, 15, 10, 13, 11, 5, 12, 12, 5, 2, 10, 8, 0, 3, 5, 1, 4, 0, 11, 6, 2, 4, 9, 14, 15, 3, 7, 5, 13, 15, 5, 6, 5, 12, 15, 7, 1, 1, 14, 9, 4, 9, 3, 9, 3,
+                      13, 7, 14, 7, 14, 2, 8, 8, 0, 1, 4, 2, 2, 12, 15, 5, 7, 6, 10, 12, 3, 3, 12, 7, 4, 6, 0, 5, 9, 1, 10, 10, 11, 5, 11, 7, 9, 7, 6, 4, 4, 15, 4, 1, 15]
+GENERIC_CORE_201512 = [0, 10, 4, 3, 14, 0, 5, 5, 3, 13, 10, 3, 12, 2, 7, 15, 6, 14, 7, 5, 7, 9, 0, 15, 0, 10, 4, 3, 14, 0, 5, 5, 3, 13, 10, 3, 12, 2, 7, 15, 6, 14, 7, 5, 7, 9, 0, 15];
+GENERIC_REMOTE_201512 = [0, 13, 12, 4, 11, 11, 7, 8, 2, 7, 11, 2, 10, 2, 6, 3, 8, 3, 1, 7, 1, 15, 13, 1, 11, 1, 12, 7, 10, 15, 8, 2, 12, 13, 9, 13, 4, 5, 5, 12, 5, 5, 9, 11, 15, 12, 2, 15];
+
 import numpy as np
 import os
 from matplotlib.pyplot import imread
@@ -24,7 +30,7 @@ import warnings
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.axes as maxes
 
-from astropy.coordinates import SkyCoord, FK5, EarthLocation, AltAz, SkyOffsetFrame, CartesianRepresentation, get_sun
+from astropy.coordinates import SkyCoord, ICRS, EarthLocation, AltAz, SkyOffsetFrame, CartesianRepresentation, get_sun
 import astropy.units as u
 from astropy.time import Time
 
@@ -33,11 +39,12 @@ from packaging import version
 assert(version.parse(lofarantpos.__version__) >= version.parse("0.4.0"))
 
 
-def sb_from_freq(freq: float, clock=200.e6):
+def sb_from_freq(freq: float, rcu_mode='1', clock=200.e6):
     """
     Convert subband number to central frequency
     
     Args:
+        rcu_mode: rcu mode
         freq: frequency in Hz
         clock: clock speed in Hz
 
@@ -45,15 +52,19 @@ def sb_from_freq(freq: float, clock=200.e6):
         int: subband number
     """
     chan = 0.5 * clock / 512.
-    sb = round(freq / chan)
+    freq_offset = 0
+    if str(rcu_mode) in ['5', '6']:
+        freq_offset = 100e6
+    sb = round((freq - freq_offset) / chan)
     return int(sb)
 
 
-def freq_from_sb(sb: int, clock=200e6):
+def freq_from_sb(sb: int, rcu_mode='1', clock=200e6):
     """
     Convert central frequency to subband number
 
     Args:
+        rcu_mode: rcu mode
         sb: subband number
         clock: clock speed in Hz
 
@@ -62,6 +73,8 @@ def freq_from_sb(sb: int, clock=200e6):
     """
     chan = 0.5 * clock / 512.
     freq = (sb * chan)
+    if str(rcu_mode) in ['5', '6']:
+        freq += 100e6
     return freq
 
 
@@ -310,24 +323,26 @@ def make_ground_image(xst_filename,
         pass
 
     # Distill metadata from filename
-    obsdatestr, obstime, _, mode, _, subbandname = cubename.rstrip(".dat").split("_")
+    obsdatestr, obstimestr, _, rcu_mode, _, subbandname = cubename.rstrip(".dat").split("_")
     subband = int(subbandname[2:])
 
-    # Needed for NL stations: inner (mode 3/4), outer (mode 1/2), (sparse tbd)
+    # Needed for NL stations: inner (rcu_mode 3/4), outer (rcu_mode 1/2), (sparse tbd)
     # Should be set to 'inner' if station type = 'intl'
     array_type = None
-    if mode in ('1', '2'):
+    if rcu_mode in ('1', '2'):
         array_type = 'outer'
-    elif mode in ('3', '4'):
+    elif rcu_mode in ('3', '4'):
         array_type = 'inner'
+    elif rcu_mode in ('5', '6', '7'):
+        array_type = rcu_mode
     else:
-        raise Exception("Unexpected mode: ", mode)
+        raise Exception("Unexpected rcu_mode: ", rcu_mode)
 
     # Get the data
-    fname = f"{obsdatestr}_{obstime}_{station_name}_SB{subband}"
+    fname = f"{obsdatestr}_{obstimestr}_{station_name}_SB{subband}"
 
     npix_l, npix_m = 101, 101
-    freq = freq_from_sb(subband)
+    freq = freq_from_sb(subband, rcu_mode=rcu_mode)
 
     # Which slice in time to visualise
     timestep = 0
@@ -335,7 +350,7 @@ def make_ground_image(xst_filename,
     # For ground imaging
     ground_resolution = pixels_per_metre  # pixels per metre for ground_imaging, default is 0.5 pixel/metre
 
-    obsdate = datetime.datetime.strptime(obsdatestr + ":" + obstime, '%Y%m%d:%H%M%S')
+    obstime = datetime.datetime.strptime(obsdatestr + ":" + obstimestr, '%Y%m%d:%H%M%S')
 
     cube = read_acm_cube(xst_filename, station_type)
 
@@ -366,14 +381,24 @@ def make_ground_image(xst_filename,
     # Setup the database
     db = LofarAntennaDatabase()
 
-    # Get the PQR positions for an individual station
-    station_pqr = db.antenna_pqr(station_name)
+    station_pqr = None
+    if 'LBA' in station_name:
+        # Get the PQR positions for an individual station
+        station_pqr = db.antenna_pqr(station_name)
 
-    # Exception: for Dutch stations (sparse not yet accommodated)
-    if (station_type == 'core' or station_type == 'remote') and array_type == 'inner':
-        station_pqr = station_pqr[0:48, :]
-    elif (station_type == 'core' or station_type == 'remote') and array_type == 'outer':
-        station_pqr = station_pqr[48:, :]
+        # Exception: for Dutch stations (sparse not yet accommodated)
+        if (station_type == 'core' or station_type == 'remote') and array_type == 'inner':
+            station_pqr = station_pqr[0:48, :]
+        elif (station_type == 'core' or station_type == 'remote') and array_type == 'outer':
+            station_pqr = station_pqr[48:, :]
+    elif 'HBA' in station_name:
+        selected_dipole_config = {
+            'intl': GENERIC_INT_201512, 'remote': GENERIC_REMOTE_201512, 'core': GENERIC_CORE_201512
+        }
+        selected_dipoles = selected_dipole_config[station_type] + np.arange(96) * 16
+        station_pqr = db.hba_dipole_pqr(station_name)[selected_dipoles]
+    else:
+        raise RuntimeError("Station name did not contain LBA or HBA, could not load antenna positions")
 
     station_pqr = station_pqr.astype('float32')
 
@@ -391,12 +416,21 @@ def make_ground_image(xst_filename,
 
     # Determine positions of Cas A and Cyg A
     station_earthlocation = EarthLocation.from_geocentric(*(db.phase_centres[station_name] * u.m))
-    zenith = AltAz(az=0 * u.deg, alt=90 * u.deg, obstime=obsdate,
-                   location=station_earthlocation).transform_to(FK5)
-    casA = SkyCoord(ra=350.85*u.deg, dec=58.815*u.deg)
-    cygA = SkyCoord(ra=299.868*u.deg, dec=40.734*u.deg)
-    casA_lmn = skycoord_to_lmn(casA, zenith)
-    cygA_lmn = skycoord_to_lmn(cygA, zenith)
+    zenith = AltAz(az=0 * u.deg, alt=90 * u.deg, obstime=obstime,
+                   location=station_earthlocation).transform_to(ICRS)
+    marked_bodies = {
+        'Cas A': SkyCoord(ra=350.85*u.deg, dec=58.815*u.deg),
+        'Cyg A': SkyCoord(ra=299.868*u.deg, dec=40.734*u.deg),
+        'Per A': SkyCoord.from_name("Perseus A"),
+        'Her A': SkyCoord.from_name("Hercules A"),
+        'Cen A': SkyCoord.from_name("Centaurus A")
+    }
+
+    marked_bodies_lmn = {}
+    for body_name, body_coord in marked_bodies.items():
+        #print(body_name, body_coord.separation(zenith))
+        if body_coord.separation(zenith) > 0:
+            marked_bodies_lmn[body_name] = skycoord_to_lmn(marked_bodies[body_name], zenith)
 
     # Plot the resulting sky image
     fig, ax = plt.subplots(1)
@@ -414,10 +448,10 @@ def make_ground_image(xst_filename,
     ax.set_xlabel('$ℓ$', fontsize=14)
     ax.set_ylabel('$m$', fontsize=14)
 
-    ax.annotate("Cas A", (-casA_lmn[0], casA_lmn[1]))
-    ax.annotate("Cyg A", (-cygA_lmn[0], cygA_lmn[1]))
+    for body_name, lmn in marked_bodies_lmn.items():
+        ax.annotate(body_name, (-lmn[0], lmn[1]))
 
-    ax.set_title(f"Sky image for {station_name}\nSB {subband} ({freq / 1e6:.1f} MHz), {str(obsdate)[:16]}", fontsize=16)
+    ax.set_title(f"Sky image for {station_name}\nSB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}", fontsize=16)
 
     # Plot the compass directions
     ax.text(0.9, 0, 'W', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
@@ -490,7 +524,7 @@ def make_ground_image(xst_filename,
     ax.set_xlabel('$W-E$ (metres)', fontsize=14)
     ax.set_ylabel('$S-N$ (metres)', fontsize=14)
 
-    ax.set_title(f"Near field image for {station_name}\nSB {subband} ({freq / 1e6:.1f} MHz), {str(obsdate)[:16]}", fontsize=16)
+    ax.set_title(f"Near field image for {station_name}\nSB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}", fontsize=16)
 
     # Change limits to match the original specified extent in the localnorth frame
     ax.set_xlim(extent[0], extent[1])
@@ -513,7 +547,7 @@ def make_ground_image(xst_filename,
     plt.imsave(f"results/tmp.png", img_rotated,
                cmap=cmap_with_alpha, origin='lower', vmin=ground_vmin, vmax=ground_vmax)
 
-    obsdate = datetime.datetime.strptime(obsdatestr + ":" + obstime, '%Y%m%d:%H%M%S')
+    obstime = datetime.datetime.strptime(obsdatestr + ":" + obstimestr, '%Y%m%d:%H%M%S')
 
     tags = {"datafile": xst_filename,
             "generated_with": f"lofarimaging v{__version__}",
@@ -525,7 +559,7 @@ def make_ground_image(xst_filename,
             "outer_extent_xyz": list(outer_extent_xyz)}
     lofargeotiff.write_geotiff(img_rotated, f"results/{fname}_nearfield_calibrated.tiff",
                                (outer_pmin, outer_qmin), (outer_pmax, outer_qmax), stationname=station_name,
-                               obsdate=obsdate, tags=tags)
+                               obsdate=obstime, tags=tags)
 
     m = folium.Map(location=[lat_center, lon_center], zoom_start=19,
                    tiles='http://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/MapServer/tile/{z}/{y}/{x}',
