@@ -414,7 +414,7 @@ def make_ground_image(xst_filename,
         selected_dipole_config = {
             'intl': GENERIC_INT_201512, 'remote': GENERIC_REMOTE_201512, 'core': GENERIC_CORE_201512
         }
-        selected_dipoles = selected_dipole_config[station_type] + np.arange(len(selected_dipole_config)) * 16
+        selected_dipoles = selected_dipole_config[station_type] + np.arange(len(selected_dipole_config[station_type])) * 16
         station_pqr = db.hba_dipole_pqr(station_name)[selected_dipoles]
     else:
         raise RuntimeError("Station name did not contain LBA or HBA, could not load antenna positions")
