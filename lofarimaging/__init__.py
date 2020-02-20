@@ -40,7 +40,7 @@ from packaging import version
 assert(version.parse(lofarantpos.__version__) >= version.parse("0.4.0"))
 
 
-def sb_from_freq(freq: float, rcu_mode='1', clock=200.e6):
+def sb_from_freq(freq: float, rcu_mode='1'):
     """
     Convert subband number to central frequency
     
@@ -52,15 +52,22 @@ def sb_from_freq(freq: float, rcu_mode='1', clock=200.e6):
     Returns:
         int: subband number
     """
-    chan = 0.5 * clock / 512.
+    clock = 200e6
+    if rcu_mode == '6':
+        clock = 160e6
+    sb_bandwidth = 0.5 * clock / 512.
     freq_offset = 0
-    if str(rcu_mode) in ['5', '6']:
+    if rcu_mode == '5':
         freq_offset = 100e6
-    sb = round((freq - freq_offset) / chan)
+    elif rcu_mode == '6':
+        freq_offset = 160e6
+    elif rcu_mode == '7':
+        freq_offset = 200e6
+    sb = round((freq - freq_offset) / sb_bandwidth)
     return int(sb)
 
 
-def freq_from_sb(sb: int, rcu_mode='1', clock=200e6):
+def freq_from_sb(sb: int, rcu_mode='1'):
     """
     Convert central frequency to subband number
 
@@ -72,10 +79,18 @@ def freq_from_sb(sb: int, rcu_mode='1', clock=200e6):
     Returns:
         float: frequency in Hz
     """
-    chan = 0.5 * clock / 512.
-    freq = (sb * chan)
-    if str(rcu_mode) in ['5', '6']:
-        freq += 100e6
+    clock = 200e6
+    if rcu_mode == '6':
+        clock = 160e6
+    freq_offset = 0
+    if rcu_mode == '5':
+        freq_offset = 100e6
+    elif rcu_mode == '6':
+        freq_offset = 160e6
+    elif rcu_mode == '7':
+        freq_offset = 200e6
+    sb_bandwidth = 0.5 * clock / 512.
+    freq = (sb * sb_bandwidth) + freq_offset
     return freq
 
 
@@ -305,7 +320,9 @@ def make_ground_image(xst_filename,
                       ground_vmin=None,
                       ground_vmax=None,
                       height=1.5,
-                      map_zoom=19):
+                      map_zoom=19,
+                      sky_only=False,
+                      opacity=0.6):
     """Make a ground image"""
     cubename = os.path.basename(xst_filename)
 
@@ -343,7 +360,7 @@ def make_ground_image(xst_filename,
     # Get the data
     fname = f"{obsdatestr}_{obstimestr}_{station_name}_SB{subband}"
 
-    npix_l, npix_m = 101, 101
+    npix_l, npix_m = 131, 131
     freq = freq_from_sb(subband, rcu_mode=rcu_mode)
 
     # Which slice in time to visualise
@@ -397,7 +414,7 @@ def make_ground_image(xst_filename,
         selected_dipole_config = {
             'intl': GENERIC_INT_201512, 'remote': GENERIC_REMOTE_201512, 'core': GENERIC_CORE_201512
         }
-        selected_dipoles = selected_dipole_config[station_type] + np.arange(96) * 16
+        selected_dipoles = selected_dipole_config[station_type] + np.arange(len(selected_dipole_config)) * 16
         station_pqr = db.hba_dipole_pqr(station_name)[selected_dipoles]
     else:
         raise RuntimeError("Station name did not contain LBA or HBA, could not load antenna positions")
@@ -416,25 +433,28 @@ def make_ground_image(xst_filename,
     img = sky_imager(visibilities, baselines, freq, npix_l, npix_m)
     img = ndimage.interpolation.rotate(img, -rotation, reshape=False, mode='nearest')
 
+    obstime_astropy = Time(obstime)
     # Determine positions of Cas A and Cyg A
     station_earthlocation = EarthLocation.from_geocentric(*(db.phase_centres[station_name] * u.m))
-    zenith = AltAz(az=0 * u.deg, alt=90 * u.deg, obstime=obstime,
+    zenith = AltAz(az=0 * u.deg, alt=90 * u.deg, obstime=obstime_astropy,
                    location=station_earthlocation).transform_to(ICRS)
     marked_bodies = {
         'Cas A': SkyCoord(ra=350.85*u.deg, dec=58.815*u.deg),
         'Cyg A': SkyCoord(ra=299.868*u.deg, dec=40.734*u.deg),
-        'Per A': SkyCoord.from_name("Perseus A"),
-        'Her A': SkyCoord.from_name("Hercules A"),
-        'Cen A': SkyCoord.from_name("Centaurus A"),
-        '3C295': SkyCoord.from_name("3C295"),
-        'Moon': get_moon(Time(obstime), location=station_earthlocation).transform_to(ICRS),
-        '3C196': SkyCoord.from_name("3C196")
+#        'Per A': SkyCoord.from_name("Perseus A"),
+#        'Her A': SkyCoord.from_name("Hercules A"),
+#        'Cen A': SkyCoord.from_name("Centaurus A"),
+#        '?': SkyCoord.from_name("J101415.9+105106"),
+#        '3C295': SkyCoord.from_name("3C295"),
+#        'Moon': get_moon(Time(obstime_astropy), location=station_earthlocation).transform_to(ICRS),
+        'Sun': get_sun(Time(obstime_astropy)).transform_to(ICRS)
+#        '3C196': SkyCoord.from_name("3C196")
     }
 
     marked_bodies_lmn = {}
     for body_name, body_coord in marked_bodies.items():
         #print(body_name, body_coord.separation(zenith), body_coord.separation(zenith))
-        if body_coord.separation(zenith) > 0:
+        if body_coord.separation(zenith) < 90*u.deg:
             marked_bodies_lmn[body_name] = skycoord_to_lmn(marked_bodies[body_name], zenith)
 
     # Plot the resulting sky image
@@ -454,6 +474,9 @@ def make_ground_image(xst_filename,
     ax.set_yticks(np.arange(-1, 1.1, 0.5))
     ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
+    for body, lmn in marked_bodies_lmn.items():
+       ax.plot([-lmn[0]], [lmn[1]], marker='x', color='white', mew=0.5)
+
     # Labels
     ax.set_xlabel('$ℓ$', fontsize=14)
     ax.set_ylabel('$m$', fontsize=14)
@@ -471,6 +494,9 @@ def make_ground_image(xst_filename,
 
     plt.savefig(f'results/{fname}_sky_calibrated.png', bbox_inches='tight', dpi=200)
     plt.close(fig)
+
+    if sky_only:
+        return img
 
     from shapely import affinity, geometry
 
@@ -549,7 +575,7 @@ def make_ground_image(xst_filename,
 
     ground_vmin_img, ground_vmax_img = cimg.get_clim()
     ax.contour(img_rotated, np.linspace(ground_vmin_img, ground_vmax_img, 15), origin='lower', cmap=cm.Greys,
-               extent=outer_extent_xyz, linewidths=0.5, alpha=0.7)
+               extent=outer_extent_xyz, linewidths=0.5, alpha=opacity)
     ax.grid(True, alpha=0.3)
     plt.savefig(f"results/{fname}_nearfield_calibrated.png", bbox_inches='tight', dpi=200)
     plt.close(fig)
@@ -566,6 +592,7 @@ def make_ground_image(xst_filename,
             "frequency": freq,
             "extent_xyz": extent,
             "height": height,
+            "station": station_name,
             "outer_extent_xyz": list(outer_extent_xyz)}
     lofargeotiff.write_geotiff(img_rotated, f"results/{fname}_nearfield_calibrated.tiff",
                                (outer_pmin, outer_qmin), (outer_pmax, outer_qmax), stationname=station_name,
@@ -580,7 +607,7 @@ def make_ground_image(xst_filename,
             name='Near field image',
             image=f"results/tmp.png",
             bounds=[[outer_lat_min, outer_lon_min], [outer_lat_max, outer_lon_max]],
-            opacity=0.6,
+            opacity=opacity,
             interactive=True,
             cross_origin=False,
             zindex=1
