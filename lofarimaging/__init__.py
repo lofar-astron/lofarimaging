@@ -31,7 +31,7 @@ import warnings
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.axes as maxes
 
-from astropy.coordinates import SkyCoord, ICRS, EarthLocation, AltAz, SkyOffsetFrame, CartesianRepresentation, get_sun, get_moon
+from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, SkyOffsetFrame, CartesianRepresentation, get_sun, get_moon
 import astropy.units as u
 from astropy.time import Time
 
@@ -437,7 +437,8 @@ def make_ground_image(xst_filename,
     # Determine positions of Cas A and Cyg A
     station_earthlocation = EarthLocation.from_geocentric(*(db.phase_centres[station_name] * u.m))
     zenith = AltAz(az=0 * u.deg, alt=90 * u.deg, obstime=obstime_astropy,
-                   location=station_earthlocation).transform_to(ICRS)
+                   location=station_earthlocation).transform_to(GCRS)
+
     marked_bodies = {
         'Cas A': SkyCoord(ra=350.85*u.deg, dec=58.815*u.deg),
         'Cyg A': SkyCoord(ra=299.868*u.deg, dec=40.734*u.deg),
@@ -446,15 +447,15 @@ def make_ground_image(xst_filename,
 #        'Cen A': SkyCoord.from_name("Centaurus A"),
 #        '?': SkyCoord.from_name("J101415.9+105106"),
 #        '3C295': SkyCoord.from_name("3C295"),
-#        'Moon': get_moon(Time(obstime_astropy), location=station_earthlocation).transform_to(ICRS),
-        'Sun': get_sun(Time(obstime_astropy)).transform_to(ICRS)
+#        'Moon': get_moon(obstime_astropy, location=station_earthlocation).transform_to(GCRS),
+        'Sun': get_sun(obstime_astropy)
 #        '3C196': SkyCoord.from_name("3C196")
     }
 
     marked_bodies_lmn = {}
     for body_name, body_coord in marked_bodies.items():
         #print(body_name, body_coord.separation(zenith), body_coord.separation(zenith))
-        if body_coord.separation(zenith) < 90*u.deg:
+        if body_coord.transform_to(AltAz(location=station_earthlocation, obstime=obstime_astropy)).alt > 0:
             marked_bodies_lmn[body_name] = skycoord_to_lmn(marked_bodies[body_name], zenith)
 
     # Plot the resulting sky image
