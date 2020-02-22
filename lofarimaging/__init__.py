@@ -2,7 +2,7 @@
 
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_background_image",
-           "sky_imager", "ground_imager"]
+           "sky_imager", "ground_imager", "get_station_pqr", "skycoord_to_lmn"]
 
 __version__ = "1.5.0"
 
@@ -168,7 +168,7 @@ def read_caltable(filename: str, num_subbands=512):
         num_subbands: Number of subbands
 
     Returns:
-        Tuple(List[str], np.array): A tuple containing a list of strings with
+        Tuple(Dict[str, str], np.array): A tuple containing a dict with
             the header lines, and a 2D numpy.array of complex numbers
             representing the station gain coefficients.
     """
@@ -178,7 +178,7 @@ def read_caltable(filename: str, num_subbands=512):
 
     try:
         while True:
-            header_lines.append(infile.readline().decode('utf8'))
+            header_lines.append(infile.readline().decode('utf8').strip())
             if 'HeaderStop' in header_lines[-1]:
                 break
     except UnicodeDecodeError:
@@ -191,7 +191,10 @@ def read_caltable(filename: str, num_subbands=512):
 
     infile.close()
 
-    return header_lines, caldata.reshape((num_subbands, num_rcus))
+    header_dict = {key: val for key, val in [line.split(" = ")
+                                             for line in header_lines[1:-1]]}
+
+    return header_dict, caldata.reshape((num_subbands, num_rcus))
 
 
 def rcus_in_station(station_type: str):
@@ -278,6 +281,27 @@ def get_background_image(lon_min, lon_max, lat_min, lat_max, zoom=19):
 
 SPEED_OF_LIGHT = 299792458.0
 
+
+def get_station_pqr(station_name: str, station_type: str, array_type: str, db):
+    if 'LBA' in station_name:
+        # Get the PQR positions for an individual station
+        station_pqr = db.antenna_pqr(station_name)
+
+        # Exception: for Dutch stations (sparse not yet accommodated)
+        if (station_type == 'core' or station_type == 'remote') and array_type == 'inner':
+            station_pqr = station_pqr[0:48, :]
+        elif (station_type == 'core' or station_type == 'remote') and array_type == 'outer':
+            station_pqr = station_pqr[48:, :]
+    elif 'HBA' in station_name:
+        selected_dipole_config = {
+            'intl': GENERIC_INT_201512, 'remote': GENERIC_REMOTE_201512, 'core': GENERIC_CORE_201512
+        }
+        selected_dipoles = selected_dipole_config[station_type] + np.arange(len(selected_dipole_config[station_type])) * 16
+        station_pqr = db.hba_dipole_pqr(station_name)[selected_dipoles]
+    else:
+        raise RuntimeError("Station name did not contain LBA or HBA, could not load antenna positions")
+
+    return station_pqr.astype('float32')
 
 def sky_imager(visibilities, baselines, freq, npix_l, npix_m):
     """Do a Fourier transform for sky imaging"""
@@ -400,26 +424,7 @@ def make_ground_image(xst_filename,
     # Setup the database
     db = LofarAntennaDatabase()
 
-    station_pqr = None
-    if 'LBA' in station_name:
-        # Get the PQR positions for an individual station
-        station_pqr = db.antenna_pqr(station_name)
-
-        # Exception: for Dutch stations (sparse not yet accommodated)
-        if (station_type == 'core' or station_type == 'remote') and array_type == 'inner':
-            station_pqr = station_pqr[0:48, :]
-        elif (station_type == 'core' or station_type == 'remote') and array_type == 'outer':
-            station_pqr = station_pqr[48:, :]
-    elif 'HBA' in station_name:
-        selected_dipole_config = {
-            'intl': GENERIC_INT_201512, 'remote': GENERIC_REMOTE_201512, 'core': GENERIC_CORE_201512
-        }
-        selected_dipoles = selected_dipole_config[station_type] + np.arange(len(selected_dipole_config[station_type])) * 16
-        station_pqr = db.hba_dipole_pqr(station_name)[selected_dipoles]
-    else:
-        raise RuntimeError("Station name did not contain LBA or HBA, could not load antenna positions")
-
-    station_pqr = station_pqr.astype('float32')
+    station_pqr = get_station_pqr(station_name, station_type, array_type, db)
 
     baselines = station_pqr[:, np.newaxis, :] - station_pqr[np.newaxis, :, :]
 
@@ -476,7 +481,7 @@ def make_ground_image(xst_filename,
     ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
     for body, lmn in marked_bodies_lmn.items():
-       ax.plot([-lmn[0]], [lmn[1]], marker='x', color='white', mew=0.5)
+        ax.plot([-lmn[0]], [lmn[1]], marker='x', color='white', mew=0.5)
 
     # Labels
     ax.set_xlabel('$ℓ$', fontsize=14)
@@ -594,7 +599,14 @@ def make_ground_image(xst_filename,
             "extent_xyz": extent,
             "height": height,
             "station": station_name,
+            "pixels_per_metre": pixels_per_metre,
             "outer_extent_xyz": list(outer_extent_xyz)}
+    if "CalTableHeader.Observation.Date" in cal_header:
+        tags["calibration_obsdate"] =  cal_header["CalTableHeader.Observation.Date"]
+    if "CalTableHeader.Calibration.Date" in cal_header:
+        tags["calibration_date"] = cal_header["CalTableHeader.Calibration.Date"]
+    if "CalTableHeader.Comment" in cal_header:
+        tags["calibration_comment"] = cal_header["CalTableHeader.Comment"]
     lofargeotiff.write_geotiff(img_rotated, f"results/{fname}_nearfield_calibrated.tiff",
                                (outer_pmin, outer_qmin), (outer_pmax, outer_qmax), stationname=station_name,
                                obsdate=obstime, tags=tags)
