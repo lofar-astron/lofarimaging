@@ -44,7 +44,7 @@ assert(version.parse(lofarantpos.__version__) >= version.parse("0.4.0"))
 def sb_from_freq(freq: float, rcu_mode='1'):
     """
     Convert subband number to central frequency
-    
+
     Args:
         rcu_mode: rcu mode
         freq: frequency in Hz
@@ -335,7 +335,7 @@ def ground_imager(visibilities, baselines, freq, npix_p, npix_q, dims, station_p
     return np.abs(img)
 
 def nearfield_imager(visibilities, baselines_indices, freqs, npix_p, npix_q, dims, station_pqr, height=1.5):
-    
+
     ant_pos=station_pqr
 
     z=height
@@ -350,7 +350,7 @@ def nearfield_imager(visibilities, baselines_indices, freqs, npix_p, npix_q, dim
 
     ddelay = np.array([delay[i] - delay[j] for i, j in baselines_indices])
 
-    
+
     vis = visibilities
     img = 0
     j2pi = 1j * 2 * np.pi
@@ -362,9 +362,9 @@ def nearfield_imager(visibilities, baselines_indices, freqs, npix_p, npix_q, dim
         #h = ne.evaluate("v * exp(j2pi * d / lamb)")  #v[:,np.newaxis,np.newaxis]*np.exp(-2j*np.pi*freq/c*groundbase_pixels[:,:,:]/c) groundbase_pixels=nvis x npix x npix
         img = ne.evaluate("img + v * exp(j2pi * d / lamb) ")
     img = np.mean(img / len(freqs))
-  
+
     return img
- 
+
 
 def make_ground_image(xst_filename,
                       station_name,
@@ -460,7 +460,7 @@ def make_ground_image(xst_filename,
 
     baselines = station_pqr[:, np.newaxis, :] - station_pqr[np.newaxis, :, :]
     #baselines = [(i,j) for i in range(len(station_pqr)) for j in range(len(station_pqr))]
-    
+
     rotation = np.rad2deg(db.rotation_from_north(station_name))
 
     # Make a sky image, by numerically Fourier-transforming from visibilities to image plane
