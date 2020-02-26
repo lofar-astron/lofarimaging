@@ -355,10 +355,10 @@ def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, exte
     y = np.linspace(extent[2], extent[3], npix_q)
 
     posx, posy = np.meshgrid(x, y)
-    posxyz = np.moveaxis(np.array([posx, posy, z * np.ones_like(posx)]), 0, -1)
+    posxyz = np.transpose(np.array([posx, posy, z * np.ones_like(posx)]), [1,2,0])
 
-    baselines = (station_pqr[:, None, None, :] - posxyz[None, None, :, :, :])[0]
-    bl_lengths = np.linalg.norm(baselines, axis=3)
+    diff_vectors = (station_pqr[:, None, None, :] - posxyz[ None, :, :, :])
+    distances = np.linalg.norm(diff_vectors, axis=3)
 
     vis_chunksize = 500
 
@@ -368,8 +368,8 @@ def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, exte
         vis_chunkend = min(vis_chunkstart + vis_chunksize, baseline_indices.shape[0])
         # For the last chunk, bl_diff_chunk is a bit smaller than bl_diff
         bl_diff_chunk = bl_diff[:vis_chunkend-vis_chunkstart,:]
-        np.add(bl_lengths[baseline_indices[vis_chunkstart:vis_chunkend, 0]],
-              -bl_lengths[baseline_indices[vis_chunkstart:vis_chunkend, 1]], out=bl_diff_chunk)
+        np.add(distances[baseline_indices[vis_chunkstart:vis_chunkend, 0]],
+              -distances[baseline_indices[vis_chunkstart:vis_chunkend, 1]], out=bl_diff_chunk)
 
         j2pi = 1j * 2 * np.pi
         for ifreq, freq in enumerate(freqs):
