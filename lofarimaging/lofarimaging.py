@@ -334,7 +334,7 @@ def ground_imager(visibilities, baselines, freq, npix_p, npix_q, dims, station_p
     return np.abs(img)
 
 
-def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, dims, station_pqr, height=1.5):
+def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, extent, station_pqr, height=1.5):
     """
     Nearfield imager
     Args:
@@ -343,7 +343,7 @@ def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, dims
         freqs: List of frequencies
         npix_p: Number of pixels in p-direction
         npix_q: Number of pixels in q-direction
-        dims: Extent (in m) that the image should span
+        extent: Extent (in m) that the image should span
         station_pqr: PQR coordinates of stations
         height: Height of image in metre
 
@@ -351,29 +351,34 @@ def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, dims
         array(float): Real-values array of shape [npix_p, npix_q]
     """
     z = height
-    x = np.linspace(dims[0], dims[1], npix_p)
-    y = np.linspace(dims[2], dims[3], npix_q)
+    x = np.linspace(extent[0], extent[1], npix_p)
+    y = np.linspace(extent[2], extent[3], npix_q)
 
     posx, posy = np.meshgrid(x, y)
     posxyz = np.moveaxis(np.array([posx, posy, z * np.ones_like(posx)]), 0, -1)
 
-    distances = (station_pqr[:, None, None, :] - posxyz[None, None, :, :, :])[0]
-    delay = np.linalg.norm(distances, axis=3)
+    baselines = (station_pqr[:, None, None, :] - posxyz[None, None, :, :, :])[0]
+    bl_lengths = np.linalg.norm(baselines, axis=3)
 
-    vis_chunksize = 1000
+    vis_chunksize = 500
 
-    img = 0
-    for vis_start in range(0, visibilities.shape[0], vis_chunksize):
-        d = np.array([delay[i] - delay[j] for i, j in baseline_indices[vis_start:vis_start + vis_chunksize]])
-        #print(d.nbytes / 1024. / 1024, "MB")
+    bl_diff = np.zeros((vis_chunksize, npix_q, npix_p), dtype=np.float64)
+    img = np.zeros((npix_q, npix_p), dtype=np.complex128)
+    for vis_chunkstart in range(0, len(baseline_indices), vis_chunksize):
+        vis_chunkend = min(vis_chunkstart + vis_chunksize, baseline_indices.shape[0])
+        # For the last chunk, bl_diff_chunk is a bit smaller than bl_diff
+        bl_diff_chunk = bl_diff[:vis_chunkend-vis_chunkstart,:]
+        np.add(bl_lengths[baseline_indices[vis_chunkstart:vis_chunkend, 0]],
+              -bl_lengths[baseline_indices[vis_chunkstart:vis_chunkend, 1]], out=bl_diff_chunk)
 
         j2pi = 1j * 2 * np.pi
         for ifreq, freq in enumerate(freqs):
-            v = visibilities[vis_start:vis_start + vis_chunksize, ifreq][:, None, None]
+            v = visibilities[vis_chunkstart:vis_chunkend, ifreq][:, None, None]
             lamb = SPEED_OF_LIGHT / freq
 
-            #h = ne.evaluate("v * exp(j2pi * d / lamb)")  #v[:,np.newaxis,np.newaxis]*np.exp(-2j*np.pi*freq/c*groundbase_pixels[:,:,:]/c) groundbase_pixels=nvis x npix x npix
-            img = img + ne.evaluate("sum(v * exp(j2pi * d / lamb), axis=0)")
+            #v[:,np.newaxis,np.newaxis]*np.exp(-2j*np.pi*freq/c*groundbase_pixels[:,:,:]/c)
+                         #groundbase_pixels=nvis x npix x npix
+            np.add(img, ne.evaluate("sum(v * exp(j2pi * bl_diff_chunk / lamb), axis=0)"), out=img)
     img /= len(freqs) * len(baseline_indices)
 
     return img
