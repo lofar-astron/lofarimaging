@@ -1,1 +1,1 @@
-from lofarimager import *
+from .lofarimaging import *

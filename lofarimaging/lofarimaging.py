@@ -1,7 +1,7 @@
 """Functions for working with LOFAR single station data"""
 
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
-           "rcus_in_station", "read_acm_cube", "get_background_image",
+           "rcus_in_station", "read_acm_cube", "get_background_image", "nearfield_imager",
            "sky_imager", "ground_imager", "get_station_pqr", "skycoord_to_lmn"]
 
 __version__ = "1.5.0"
@@ -332,7 +332,7 @@ def ground_imager(visibilities, baselines, freq, npix_p, npix_q, dims, station_p
                 groundbase = antdist[:, np.newaxis] - antdist[np.newaxis, :]
                 # Note: this is RFI integration second - normal second, to take out interference
                 img[q_ix, p_ix] = np.mean(visibilities * np.exp(-2j * np.pi * freq * (-groundbase) / SPEED_OF_LIGHT))
-    return img
+    return np.abs(img)
 
 def nearfield_imager(visibilities, baselines_indices, freqs, npix_p, npix_q, dims, station_pqr, height=1.5):
     
@@ -361,7 +361,7 @@ def nearfield_imager(visibilities, baselines_indices, freqs, npix_p, npix_q, dim
 
         #h = ne.evaluate("v * exp(j2pi * d / lamb)")  #v[:,np.newaxis,np.newaxis]*np.exp(-2j*np.pi*freq/c*groundbase_pixels[:,:,:]/c) groundbase_pixels=nvis x npix x npix
         img = ne.evaluate("img + v * exp(j2pi * d / lamb) ")
-    img = np.mean(img / len(freqs)  #
+    img = np.mean(img / len(freqs))
   
     return img
  
