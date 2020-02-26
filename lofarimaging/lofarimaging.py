@@ -330,38 +330,51 @@ def ground_imager(visibilities, baselines, freq, npix_p, npix_q, dims, station_p
                 pqr = np.array([p, q, r], dtype=np.float32)
                 antdist = np.linalg.norm(station_pqr - pqr[np.newaxis, :], axis=1)
                 groundbase = antdist[:, np.newaxis] - antdist[np.newaxis, :]
-                # Note: this is RFI integration second - normal second, to take out interference
                 img[q_ix, p_ix] = np.mean(visibilities * np.exp(-2j * np.pi * freq * (-groundbase) / SPEED_OF_LIGHT))
     return np.abs(img)
 
-def nearfield_imager(visibilities, baselines_indices, freqs, npix_p, npix_q, dims, station_pqr, height=1.5):
 
-    ant_pos=station_pqr
+def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, dims, station_pqr, height=1.5):
+    """
+    Nearfield imager
+    Args:
+        visibilities: Numpy array with visibilities, shape [num_visibilities x num_frequencies]
+        baseline_indices: List with tuples of antenna numbers in visibilities, shape [2 x num_visibilities]
+        freqs: List of frequencies
+        npix_p: Number of pixels in p-direction
+        npix_q: Number of pixels in q-direction
+        dims: Extent (in m) that the image should span
+        station_pqr: PQR coordinates of stations
+        height: Height of image in metre
 
-    z=height
+    Returns:
+        array(float): Real-values array of shape [npix_p, npix_q]
+    """
+    z = height
     x = np.linspace(dims[0], dims[1], npix_p)
     y = np.linspace(dims[2], dims[3], npix_q)
+
     posx, posy = np.meshgrid(x, y)
+    posxyz = np.moveaxis(np.array([posx, posy, z * np.ones_like(posx)]), 0, -1)
 
-    dd = (ant_pos[:, 0][:, None, None] - posx[None]) ** 2 \
-        + (ant_pos[:, 1][:, None, None] - posy[None]) ** 2 \
-        + (ant_pos[:, 2][:, None, None] - z) ** 2
-    delay = np.sqrt(dd)
+    distances = (station_pqr[:, None, None, :] - posxyz[None, None, :, :, :])[0]
+    delay = np.linalg.norm(distances, axis=3)
 
-    ddelay = np.array([delay[i] - delay[j] for i, j in baselines_indices])
+    vis_chunksize = 1000
 
-
-    vis = visibilities
     img = 0
-    j2pi = 1j * 2 * np.pi
-    d = ddelay
-    for ifreq, freq in enumerate(freqs):
-        v = vis[:, ifreq][:, None, None]
-        lamb = SPEED_OF_LIGHT / freq
+    for vis_start in range(0, visibilities.shape[0], vis_chunksize):
+        d = np.array([delay[i] - delay[j] for i, j in baseline_indices[vis_start:vis_start + vis_chunksize]])
+        #print(d.nbytes / 1024. / 1024, "MB")
 
-        #h = ne.evaluate("v * exp(j2pi * d / lamb)")  #v[:,np.newaxis,np.newaxis]*np.exp(-2j*np.pi*freq/c*groundbase_pixels[:,:,:]/c) groundbase_pixels=nvis x npix x npix
-        img = ne.evaluate("img + v * exp(j2pi * d / lamb) ")
-    img = np.mean(img / len(freqs))
+        j2pi = 1j * 2 * np.pi
+        for ifreq, freq in enumerate(freqs):
+            v = visibilities[vis_start:vis_start + vis_chunksize, ifreq][:, None, None]
+            lamb = SPEED_OF_LIGHT / freq
+
+            #h = ne.evaluate("v * exp(j2pi * d / lamb)")  #v[:,np.newaxis,np.newaxis]*np.exp(-2j*np.pi*freq/c*groundbase_pixels[:,:,:]/c) groundbase_pixels=nvis x npix x npix
+            img = img + ne.evaluate("sum(v * exp(j2pi * d / lamb), axis=0)")
+    img /= len(freqs) * len(baseline_indices)
 
     return img
 
