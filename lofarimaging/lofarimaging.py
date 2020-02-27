@@ -2,7 +2,7 @@
 
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_background_image", "nearfield_imager",
-           "sky_imager", "ground_imager", "get_station_pqr", "skycoord_to_lmn"]
+           "sky_imager", "ground_imager", "get_station_pqr", "skycoord_to_lmn", "make_ground_image"]
 
 __version__ = "1.5.0"
 
