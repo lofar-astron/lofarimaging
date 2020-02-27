@@ -334,7 +334,8 @@ def ground_imager(visibilities, freq, npix_p, npix_q, dims, station_pqr, height=
     return np.abs(img)
 
 
-def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, extent, station_pqr, height=1.5):
+def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, extent, station_pqr, height=1.5,
+                     max_memory_mb=200):
     """
     Nearfield imager
     Args:
@@ -346,6 +347,7 @@ def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, exte
         extent: Extent (in m) that the image should span
         station_pqr: PQR coordinates of stations
         height: Height of image in metre
+        max_memory_mb: Maximum amount of memory to use for the biggest array. Higher may improve performance.
 
     Returns:
         array(float): Real-values array of shape [npix_p, npix_q]
@@ -360,7 +362,7 @@ def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, exte
     diff_vectors = (station_pqr[:, None, None, :] - posxyz[ None, :, :, :])
     distances = np.linalg.norm(diff_vectors, axis=3)
 
-    vis_chunksize = 500
+    vis_chunksize = max_memory_mb * 1024 * 1024 // (8 * npix_p * npix_q)
 
     bl_diff = np.zeros((vis_chunksize, npix_q, npix_p), dtype=np.float64)
     img = np.zeros((npix_q, npix_p), dtype=np.complex128)
