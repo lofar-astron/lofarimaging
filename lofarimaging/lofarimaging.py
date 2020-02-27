@@ -318,7 +318,7 @@ def sky_imager(visibilities, baselines, freq, npix_l, npix_m):
     return img
 
 
-def ground_imager(visibilities, baselines, freq, npix_p, npix_q, dims, station_pqr, height=1.5):
+def ground_imager(visibilities, freq, npix_p, npix_q, dims, station_pqr, height=1.5):
     """Do a Fourier transform for ground imaging"""
     img = np.zeros([npix_q, npix_p], dtype=np.complex)
 
@@ -574,7 +574,20 @@ def make_ground_image(xst_filename,
 
     npix_p, npix_q = int(ground_resolution * (extent[1] - extent[0])), int(ground_resolution * (extent[3] - extent[2]))
 
-    img = ground_imager(visibilities, baselines, freq, npix_p, npix_q, extent_pqr, station_pqr, height=height)
+    os.environ["NUMEXPR_NUM_THREADS"] = "3"
+
+    # Select a subset of visibilities, only the lower triangular part
+    baseline_indices = np.tril_indices(visibilities.shape[0])
+
+    visibilities_selection = visibilities[baseline_indices]
+
+    img = nearfield_imager(visibilities_selection.flatten()[:, np.newaxis],
+                           np.array(baseline_indices).T,
+                           [freq], npix_p, npix_q, extent_pqr, station_pqr, height=height)
+
+    # Correct for taking only lower triangular part
+    img = np.real(2 * img)
+
     img_rotated = ndimage.interpolation.rotate(img, rotation, mode='constant', cval=np.nan)
 
     outer_extent_xyz = extent_from_shapely(*(to_plot_xyz.envelope.bounds))  # Extent in xyz coordinates of the rotated image.
