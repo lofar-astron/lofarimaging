@@ -478,10 +478,16 @@ def make_ground_image(xst_filename,
 
     station_pqr = get_station_pqr(station_name, station_type, array_type, db)
 
-    baselines = station_pqr[:, np.newaxis, :] - station_pqr[np.newaxis, :, :]
-    #baselines = [(i,j) for i in range(len(station_pqr)) for j in range(len(station_pqr))]
+    # Rotate station_pqr to a north-oriented xyz frame, where y points North, in a plane through the station.
+    rotation = db.rotation_from_north(station_name)
 
-    rotation = np.rad2deg(db.rotation_from_north(station_name))
+    pqr_to_xyz = np.array([[np.cos(-rotation), -np.sin(-rotation), 0],
+                           [np.sin(-rotation), np.cos(-rotation), 0],
+                           [0, 0, 1]])
+
+    station_xyz = (pqr_to_xyz @ station_pqr.T).T
+
+    baselines = station_xyz[:, np.newaxis, :] - station_xyz[np.newaxis, :, :]
 
     # Make a sky image, by numerically Fourier-transforming from visibilities to image plane
     from matplotlib.patches import Circle
@@ -557,24 +563,7 @@ def make_ground_image(xst_filename,
     if sky_only:
         return img
 
-    from shapely import affinity, geometry
-
-    def extent_from_shapely(minx, miny, maxx, maxy):
-        return minx, maxx, miny, maxy
-
-    def extent_to_shapely(minx, maxx, miny, maxy):
-        return minx, miny, maxx, maxy
-
-    to_plot_xyz = affinity.rotate(
-            affinity.rotate(
-                    geometry.box(*extent_to_shapely(*extent)),
-                    rotation, origin=(0, 0)).envelope,
-            -rotation, origin=(0, 0))
-
-    to_plot_pqr = db.pqr_to_localnorth(station_name)[:2, :2].T @ (np.asarray(to_plot_xyz.exterior.coords[:4])).T
-    extent_pqr = (np.min(to_plot_pqr[0, :]), np.max(to_plot_pqr[0, :]), np.min(to_plot_pqr[1, :]), np.max(to_plot_pqr[1, :]))
-
-    npix_p, npix_q = int(ground_resolution * (extent[1] - extent[0])), int(ground_resolution * (extent[3] - extent[2]))
+    npix_x, npix_y = int(ground_resolution * (extent[1] - extent[0])), int(ground_resolution * (extent[3] - extent[2]))
 
     os.environ["NUMEXPR_NUM_THREADS"] = "3"
 
@@ -585,27 +574,17 @@ def make_ground_image(xst_filename,
 
     img = nearfield_imager(visibilities_selection.flatten()[:, np.newaxis],
                            np.array(baseline_indices).T,
-                           [freq], npix_p, npix_q, extent_pqr, station_pqr, height=height)
+                           [freq], npix_x, npix_y, extent, station_xyz, height=height)
 
     # Correct for taking only lower triangular part
     img = np.real(2 * img)
 
-    img_rotated = ndimage.interpolation.rotate(img, rotation, mode='constant', cval=np.nan)
-
-    outer_extent_xyz = extent_from_shapely(*(to_plot_xyz.envelope.bounds))  # Extent in xyz coordinates of the rotated image.
-
     # Convert bottom left and upper right to PQR just for lofargeo
-    pmin, qmin, _ = db.pqr_to_localnorth(station_name).T @ (np.array([extent[0], extent[2], 0]))
-    pmax, qmax, _ = db.pqr_to_localnorth(station_name).T @ (np.array([extent[1], extent[3], 0]))
+    pmin, qmin, _ = pqr_to_xyz.T @ (np.array([extent[0], extent[2], 0]))
+    pmax, qmax, _ = pqr_to_xyz.T @ (np.array([extent[1], extent[3], 0]))
     lon_center, lat_center, _ = lofargeotiff.pqr_to_longlatheight([0, 0, 0], station_name)
     lon_min, lat_min, _ = lofargeotiff.pqr_to_longlatheight([pmin, qmin, 0], station_name)
     lon_max, lat_max, _ = lofargeotiff.pqr_to_longlatheight([pmax, qmax, 0], station_name)
-
-    # Convert bottom left and upper right to PQR just for lofargeo
-    outer_pmin, outer_qmin, _ = db.pqr_to_localnorth(station_name).T @ (np.array([outer_extent_xyz[0], outer_extent_xyz[2], 0]))
-    outer_pmax, outer_qmax, _ = db.pqr_to_localnorth(station_name).T @ (np.array([outer_extent_xyz[1], outer_extent_xyz[3], 0]))
-    outer_lon_min, outer_lat_min, _ = lofargeotiff.pqr_to_longlatheight([outer_pmin, outer_qmin, 0], station_name)
-    outer_lon_max, outer_lat_max, _ = lofargeotiff.pqr_to_longlatheight([outer_pmax, outer_qmax, 0], station_name)
 
     background_image = get_background_image(lon_min, lon_max, lat_min, lat_max, zoom=map_zoom)
 
@@ -619,7 +598,7 @@ def make_ground_image(xst_filename,
     fig = plt.figure(figsize=(10, 10), constrained_layout=True)
     ax = fig.add_subplot(111, ymargin=-0.4)
     ax.imshow(background_image, extent=extent)
-    cimg = ax.imshow(img_rotated, origin='lower', cmap=cmap_with_alpha, extent=outer_extent_xyz,
+    cimg = ax.imshow(img, origin='lower', cmap=cmap_with_alpha, extent=extent,
                      alpha=0.7, vmin=ground_vmin, vmax=ground_vmax)
 
     divider = make_axes_locatable(ax)
@@ -646,13 +625,13 @@ def make_ground_image(xst_filename,
     ax.text(0.5, 0.05, 'S', color='w', fontsize=18, transform=ax.transAxes, horizontalalignment='center', verticalalignment='center')
 
     ground_vmin_img, ground_vmax_img = cimg.get_clim()
-    ax.contour(img_rotated, np.linspace(ground_vmin_img, ground_vmax_img, 15), origin='lower', cmap=cm.Greys,
-               extent=outer_extent_xyz, linewidths=0.5, alpha=opacity)
+    ax.contour(img, np.linspace(ground_vmin_img, ground_vmax_img, 15), origin='lower', cmap=cm.Greys,
+               extent=extent, linewidths=0.5, alpha=opacity)
     ax.grid(True, alpha=0.3)
     plt.savefig(f"results/{fname}_nearfield_calibrated.png", bbox_inches='tight', dpi=200)
     plt.close(fig)
 
-    plt.imsave(f"results/tmp.png", img_rotated,
+    plt.imsave(f"results/tmp.png", img,
                cmap=cmap_with_alpha, origin='lower', vmin=ground_vmin, vmax=ground_vmax)
 
     obstime = datetime.datetime.strptime(obsdatestr + ":" + obstimestr, '%Y%m%d:%H%M%S')
@@ -665,16 +644,15 @@ def make_ground_image(xst_filename,
             "extent_xyz": extent,
             "height": height,
             "station": station_name,
-            "pixels_per_metre": pixels_per_metre,
-            "outer_extent_xyz": list(outer_extent_xyz)}
+            "pixels_per_metre": pixels_per_metre}
     if "CalTableHeader.Observation.Date" in cal_header:
         tags["calibration_obsdate"] =  cal_header["CalTableHeader.Observation.Date"]
     if "CalTableHeader.Calibration.Date" in cal_header:
         tags["calibration_date"] = cal_header["CalTableHeader.Calibration.Date"]
     if "CalTableHeader.Comment" in cal_header:
         tags["calibration_comment"] = cal_header["CalTableHeader.Comment"]
-    lofargeotiff.write_geotiff(img_rotated, f"results/{fname}_nearfield_calibrated.tiff",
-                               (outer_pmin, outer_qmin), (outer_pmax, outer_qmax), stationname=station_name,
+    lofargeotiff.write_geotiff(img, f"results/{fname}_nearfield_calibrated.tiff",
+                               (pmin, qmin), (pmax, qmax), stationname=station_name,
                                obsdate=obstime, tags=tags)
 
     m = folium.Map(location=[lat_center, lon_center], zoom_start=19,
@@ -685,7 +663,7 @@ def make_ground_image(xst_filename,
     folium.raster_layers.ImageOverlay(
             name='Near field image',
             image=f"results/tmp.png",
-            bounds=[[outer_lat_min, outer_lon_min], [outer_lat_max, outer_lon_max]],
+            bounds=[[lat_min, lon_min], [lat_max, lon_max]],
             opacity=opacity,
             interactive=True,
             cross_origin=False,
