@@ -1,17 +1,5 @@
 """Functions for working with LOFAR single station data"""
 
-__all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
-           "rcus_in_station", "read_acm_cube", "get_background_image", "nearfield_imager",
-           "sky_imager", "ground_imager", "get_station_pqr", "skycoord_to_lmn", "make_ground_image"]
-
-__version__ = "1.5.0"
-
-# Configurations for HBA observations with a single dipole activated per tile.
-GENERIC_INT_201512 = [0, 5, 3, 1, 8, 3, 12, 15, 10, 13, 11, 5, 12, 12, 5, 2, 10, 8, 0, 3, 5, 1, 4, 0, 11, 6, 2, 4, 9, 14, 15, 3, 7, 5, 13, 15, 5, 6, 5, 12, 15, 7, 1, 1, 14, 9, 4, 9, 3, 9, 3,
-                      13, 7, 14, 7, 14, 2, 8, 8, 0, 1, 4, 2, 2, 12, 15, 5, 7, 6, 10, 12, 3, 3, 12, 7, 4, 6, 0, 5, 9, 1, 10, 10, 11, 5, 11, 7, 9, 7, 6, 4, 4, 15, 4, 1, 15]
-GENERIC_CORE_201512 = [0, 10, 4, 3, 14, 0, 5, 5, 3, 13, 10, 3, 12, 2, 7, 15, 6, 14, 7, 5, 7, 9, 0, 15, 0, 10, 4, 3, 14, 0, 5, 5, 3, 13, 10, 3, 12, 2, 7, 15, 6, 14, 7, 5, 7, 9, 0, 15];
-GENERIC_REMOTE_201512 = [0, 13, 12, 4, 11, 11, 7, 8, 2, 7, 11, 2, 10, 2, 6, 3, 8, 3, 1, 7, 1, 15, 13, 1, 11, 1, 12, 7, 10, 15, 8, 2, 12, 13, 9, 13, 4, 5, 5, 12, 5, 5, 9, 11, 15, 12, 2, 15];
-
 import numpy as np
 import numexpr as ne
 import os
@@ -38,7 +26,24 @@ from astropy.time import Time
 
 import lofarantpos
 from packaging import version
-assert(version.parse(lofarantpos.__version__) >= version.parse("0.4.0"))
+
+__all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
+           "rcus_in_station", "read_acm_cube", "get_background_image", "nearfield_imager",
+           "sky_imager", "ground_imager", "get_station_pqr", "skycoord_to_lmn", "make_ground_image"]
+
+__version__ = "1.5.0"
+
+# Configurations for HBA observations with a single dipole activated per tile.
+GENERIC_INT_201512 = [0, 5, 3, 1, 8, 3, 12, 15, 10, 13, 11, 5, 12, 12, 5, 2, 10, 8, 0, 3, 5, 1, 4, 0, 11, 6, 2, 4, 9,
+                      14, 15, 3, 7, 5, 13, 15, 5, 6, 5, 12, 15, 7, 1, 1, 14, 9, 4, 9, 3, 9, 3, 13, 7, 14, 7, 14, 2, 8,
+                      8, 0, 1, 4, 2, 2, 12, 15, 5, 7, 6, 10, 12, 3, 3, 12, 7, 4, 6, 0, 5, 9, 1, 10, 10, 11, 5, 11, 7, 9,
+                      7, 6, 4, 4, 15, 4, 1, 15]
+GENERIC_CORE_201512 = [0, 10, 4, 3, 14, 0, 5, 5, 3, 13, 10, 3, 12, 2, 7, 15, 6, 14, 7, 5, 7, 9, 0, 15, 0, 10, 4, 3, 14,
+                       0, 5, 5, 3, 13, 10, 3, 12, 2, 7, 15, 6, 14, 7, 5, 7, 9, 0, 15]
+GENERIC_REMOTE_201512 = [0, 13, 12, 4, 11, 11, 7, 8, 2, 7, 11, 2, 10, 2, 6, 3, 8, 3, 1, 7, 1, 15, 13, 1, 11, 1, 12, 7,
+                         10, 15, 8, 2, 12, 13, 9, 13, 4, 5, 5, 12, 5, 5, 9, 11, 15, 12, 2, 15]
+
+assert (version.parse(lofarantpos.__version__) >= version.parse("0.4.0"))
 
 
 def sb_from_freq(freq: float, rcu_mode='1'):
@@ -48,7 +53,6 @@ def sb_from_freq(freq: float, rcu_mode='1'):
     Args:
         rcu_mode: rcu mode
         freq: frequency in Hz
-        clock: clock speed in Hz
 
     Returns:
         int: subband number
@@ -75,7 +79,6 @@ def freq_from_sb(sb: int, rcu_mode='1'):
     Args:
         rcu_mode: rcu mode
         sb: subband number
-        clock: clock speed in Hz
 
     Returns:
         float: frequency in Hz
@@ -261,7 +264,8 @@ def get_background_image(lon_min, lon_max, lat_min, lat_max, zoom=19):
     tile_min = mercantile.tile(lon_min, lat_min, zoom)
     tile_max = mercantile.tile(lon_max, lat_max, zoom)
 
-    wmts = WebMapTileService("http://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml")
+    wmts = WebMapTileService("http://server.arcgisonline.com/arcgis/rest/" +
+                             "services/World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml")
 
     for x in range(tile_min.x, tile_max.x + 1):
         for y in range(tile_max.y, tile_min.y + 1):
@@ -275,14 +279,14 @@ def get_background_image(lon_min, lon_max, lat_min, lat_max, zoom=19):
             total_image[(y - ymin) * 256: (y - ymin + 1) * 256,
                         (x - xmin) * 256: (x - xmin + 1) * 256] = tile_image
 
-    total_lonlatmin = {'lon': mercantile.bounds(xmin, ymax, zoom).west, 'lat': mercantile.bounds(xmin, ymax, zoom).south}
-    total_lonlatmax = {'lon': mercantile.bounds(xmax, ymin, zoom).east, 'lat': mercantile.bounds(xmax, ymin, zoom).north}
+    total_llmin = {'lon': mercantile.bounds(xmin, ymax, zoom).west, 'lat': mercantile.bounds(xmin, ymax, zoom).south}
+    total_llmax = {'lon': mercantile.bounds(xmax, ymin, zoom).east, 'lat': mercantile.bounds(xmax, ymin, zoom).north}
 
-    pix_xmin = int(round(np.interp(lon_min, [total_lonlatmin['lon'], total_lonlatmax['lon']], [0, total_image.shape[1]])))
-    pix_ymin = int(round(np.interp(lat_min, [total_lonlatmin['lat'], total_lonlatmax['lat']], [0, total_image.shape[0]])))
-    pix_xmax = int(round(np.interp(lon_max, [total_lonlatmin['lon'], total_lonlatmax['lon']], [0, total_image.shape[1]])))
-    pix_ymax = int(round(np.interp(lat_max, [total_lonlatmin['lat'], total_lonlatmax['lat']], [0, total_image.shape[0]])))
-    return total_image[total_image.shape[0]-pix_ymax: total_image.shape[0]-pix_ymin, pix_xmin: pix_xmax]
+    pix_xmin = int(round(np.interp(lon_min, [total_llmin['lon'], total_llmax['lon']], [0, total_image.shape[1]])))
+    pix_ymin = int(round(np.interp(lat_min, [total_llmin['lat'], total_llmax['lat']], [0, total_image.shape[0]])))
+    pix_xmax = int(round(np.interp(lon_max, [total_llmin['lon'], total_llmax['lon']], [0, total_image.shape[1]])))
+    pix_ymax = int(round(np.interp(lat_max, [total_llmin['lat'], total_llmax['lat']], [0, total_image.shape[0]])))
+    return total_image[total_image.shape[0] - pix_ymax: total_image.shape[0] - pix_ymin, pix_xmin: pix_xmax]
 
 
 SPEED_OF_LIGHT = 299792458.0
@@ -302,12 +306,14 @@ def get_station_pqr(station_name: str, station_type: str, array_type: str, db):
         selected_dipole_config = {
             'intl': GENERIC_INT_201512, 'remote': GENERIC_REMOTE_201512, 'core': GENERIC_CORE_201512
         }
-        selected_dipoles = selected_dipole_config[station_type] + np.arange(len(selected_dipole_config[station_type])) * 16
+        selected_dipoles = selected_dipole_config[station_type] + \
+            np.arange(len(selected_dipole_config[station_type])) * 16
         station_pqr = db.hba_dipole_pqr(station_name)[selected_dipoles]
     else:
         raise RuntimeError("Station name did not contain LBA or HBA, could not load antenna positions")
 
     return station_pqr.astype('float32')
+
 
 def sky_imager(visibilities, baselines, freq, npix_l, npix_m):
     """Do a Fourier transform for sky imaging"""
@@ -362,9 +368,9 @@ def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, exte
     y = np.linspace(extent[2], extent[3], npix_q)
 
     posx, posy = np.meshgrid(x, y)
-    posxyz = np.transpose(np.array([posx, posy, z * np.ones_like(posx)]), [1,2,0])
+    posxyz = np.transpose(np.array([posx, posy, z * np.ones_like(posx)]), [1, 2, 0])
 
-    diff_vectors = (station_pqr[:, None, None, :] - posxyz[ None, :, :, :])
+    diff_vectors = (station_pqr[:, None, None, :] - posxyz[None, :, :, :])
     distances = np.linalg.norm(diff_vectors, axis=3)
 
     vis_chunksize = max_memory_mb * 1024 * 1024 // (8 * npix_p * npix_q)
@@ -374,17 +380,17 @@ def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, exte
     for vis_chunkstart in range(0, len(baseline_indices), vis_chunksize):
         vis_chunkend = min(vis_chunkstart + vis_chunksize, baseline_indices.shape[0])
         # For the last chunk, bl_diff_chunk is a bit smaller than bl_diff
-        bl_diff_chunk = bl_diff[:vis_chunkend-vis_chunkstart,:]
+        bl_diff_chunk = bl_diff[:vis_chunkend - vis_chunkstart, :]
         np.add(distances[baseline_indices[vis_chunkstart:vis_chunkend, 0]],
-              -distances[baseline_indices[vis_chunkstart:vis_chunkend, 1]], out=bl_diff_chunk)
+               -distances[baseline_indices[vis_chunkstart:vis_chunkend, 1]], out=bl_diff_chunk)
 
         j2pi = 1j * 2 * np.pi
         for ifreq, freq in enumerate(freqs):
             v = visibilities[vis_chunkstart:vis_chunkend, ifreq][:, None, None]
             lamb = SPEED_OF_LIGHT / freq
 
-            #v[:,np.newaxis,np.newaxis]*np.exp(-2j*np.pi*freq/c*groundbase_pixels[:,:,:]/c)
-                         #groundbase_pixels=nvis x npix x npix
+            # v[:,np.newaxis,np.newaxis]*np.exp(-2j*np.pi*freq/c*groundbase_pixels[:,:,:]/c)
+            # groundbase_pixels=nvis x npix x npix
             np.add(img, ne.evaluate("sum(v * exp(j2pi * bl_diff_chunk / lamb), axis=0)"), out=img)
     img /= len(freqs) * len(baseline_indices)
 
@@ -459,6 +465,7 @@ def make_ground_image(xst_filename,
     caltable_filename = find_caltable(station_name, rcu_mode=array_type,
                                       config_dir=caltable_dir)
 
+    cal_header = None
     if caltable_filename is None:
         print('No calibration table found... cube remains uncalibrated!')
     else:
@@ -509,21 +516,21 @@ def make_ground_image(xst_filename,
                    location=station_earthlocation).transform_to(GCRS)
 
     marked_bodies = {
-        'Cas A': SkyCoord(ra=350.85*u.deg, dec=58.815*u.deg),
-        'Cyg A': SkyCoord(ra=299.868*u.deg, dec=40.734*u.deg),
-#        'Per A': SkyCoord.from_name("Perseus A"),
-#        'Her A': SkyCoord.from_name("Hercules A"),
-#        'Cen A': SkyCoord.from_name("Centaurus A"),
-#        '?': SkyCoord.from_name("J101415.9+105106"),
-#        '3C295': SkyCoord.from_name("3C295"),
-#        'Moon': get_moon(obstime_astropy, location=station_earthlocation).transform_to(GCRS),
+        'Cas A': SkyCoord(ra=350.85 * u.deg, dec=58.815 * u.deg),
+        'Cyg A': SkyCoord(ra=299.868 * u.deg, dec=40.734 * u.deg),
+        #        'Per A': SkyCoord.from_name("Perseus A"),
+        #        'Her A': SkyCoord.from_name("Hercules A"),
+        #        'Cen A': SkyCoord.from_name("Centaurus A"),
+        #        '?': SkyCoord.from_name("J101415.9+105106"),
+        #        '3C295': SkyCoord.from_name("3C295"),
+        #        'Moon': get_moon(obstime_astropy, location=station_earthlocation).transform_to(GCRS),
         'Sun': get_sun(obstime_astropy)
-#        '3C196': SkyCoord.from_name("3C196")
+        #        '3C196': SkyCoord.from_name("3C196")
     }
 
     marked_bodies_lmn = {}
     for body_name, body_coord in marked_bodies.items():
-        #print(body_name, body_coord.separation(zenith), body_coord.separation(zenith))
+        # print(body_name, body_coord.separation(zenith), body_coord.separation(zenith))
         if body_coord.transform_to(AltAz(location=station_earthlocation, obstime=obstime_astropy)).alt > 0:
             marked_bodies_lmn[body_name] = skycoord_to_lmn(marked_bodies[body_name], zenith)
 
@@ -616,7 +623,8 @@ def make_ground_image(xst_filename,
     ax.set_xlabel('$W-E$ (metres)', fontsize=14)
     ax.set_ylabel('$S-N$ (metres)', fontsize=14)
 
-    ax.set_title(f"Near field image for {station_name}\nSB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}", fontsize=16)
+    ax.set_title(f"Near field image for {station_name}\nSB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
+                 fontsize=16)
 
     # Change limits to match the original specified extent in the localnorth frame
     ax.set_xlim(extent[0], extent[1])
@@ -624,10 +632,10 @@ def make_ground_image(xst_filename,
     ax.tick_params(axis='both', which='both', length=0)
 
     # Place the NSEW coordinate directions
-    ax.text(0.95, 0.5, 'E', color='w', fontsize=18, transform=ax.transAxes, horizontalalignment='center', verticalalignment='center')
-    ax.text(0.05, 0.5, 'W', color='w', fontsize=18, transform=ax.transAxes, horizontalalignment='center', verticalalignment='center')
-    ax.text(0.5, 0.95, 'N', color='w', fontsize=18, transform=ax.transAxes, horizontalalignment='center', verticalalignment='center')
-    ax.text(0.5, 0.05, 'S', color='w', fontsize=18, transform=ax.transAxes, horizontalalignment='center', verticalalignment='center')
+    ax.text(0.95, 0.5, 'E', color='w', fontsize=18, transform=ax.transAxes, ha='center', va='center')
+    ax.text(0.05, 0.5, 'W', color='w', fontsize=18, transform=ax.transAxes, ha='center', va='center')
+    ax.text(0.5, 0.95, 'N', color='w', fontsize=18, transform=ax.transAxes, ha='center', va='center')
+    ax.text(0.5, 0.05, 'S', color='w', fontsize=18, transform=ax.transAxes, ha='center', va='center')
 
     ground_vmin_img, ground_vmax_img = cimg.get_clim()
     ax.contour(img, np.linspace(ground_vmin_img, ground_vmax_img, 15), origin='lower', cmap=cm.Greys,
@@ -647,7 +655,8 @@ def make_ground_image(xst_filename,
 
     # Show location of maximum if not at the image border
     if 2 < maxpixel_xpix < npix_x - 2 and 2 < maxpixel_ypix < npix_y - 2:
-        print(f"Maximum at {maxpixel_x:.0f}m east, {maxpixel_y:.0f}m north of station center (lat/long {maxpixel_lat:.5f}, {maxpixel_lon:.5f})")
+        print(f"Maximum at {maxpixel_x:.0f}m east, {maxpixel_y:.0f}m north of station center " +
+              f"(lat/long {maxpixel_lat:.5f}, {maxpixel_lon:.5f})")
 
     obstime = datetime.datetime.strptime(obsdatestr + ":" + obstimestr, '%Y%m%d:%H%M%S')
 
@@ -660,18 +669,20 @@ def make_ground_image(xst_filename,
             "height": height,
             "station": station_name,
             "pixels_per_metre": pixels_per_metre}
-    if "CalTableHeader.Observation.Date" in cal_header:
-        tags["calibration_obsdate"] =  cal_header["CalTableHeader.Observation.Date"]
-    if "CalTableHeader.Calibration.Date" in cal_header:
-        tags["calibration_date"] = cal_header["CalTableHeader.Calibration.Date"]
-    if "CalTableHeader.Comment" in cal_header:
-        tags["calibration_comment"] = cal_header["CalTableHeader.Comment"]
+    if cal_header is not None:
+        if "CalTableHeader.Observation.Date" in cal_header:
+            tags["calibration_obsdate"] = cal_header["CalTableHeader.Observation.Date"]
+        if "CalTableHeader.Calibration.Date" in cal_header:
+            tags["calibration_date"] = cal_header["CalTableHeader.Calibration.Date"]
+        if "CalTableHeader.Comment" in cal_header:
+            tags["calibration_comment"] = cal_header["CalTableHeader.Comment"]
     lofargeotiff.write_geotiff(img, f"results/{fname}_nearfield_calibrated.tiff",
                                (pmin, qmin), (pmax, qmax), stationname=station_name,
                                obsdate=obstime, tags=tags)
 
     m = folium.Map(location=[lat_center, lon_center], zoom_start=19,
-                   tiles='http://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/MapServer/tile/{z}/{y}/{x}',
+                   tiles='http://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/MapServer/' +
+                         'tile/{z}/{y}/{x}',
                    attr='ESRI')
     folium.TileLayer(tiles="OpenStreetMap").add_to(m)
 
