@@ -32,7 +32,7 @@ import warnings
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.axes as maxes
 
-from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, SkyOffsetFrame, CartesianRepresentation, get_sun, get_moon
+from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, SkyOffsetFrame, CartesianRepresentation, get_sun
 import astropy.units as u
 from astropy.time import Time
 
@@ -528,26 +528,26 @@ def make_ground_image(xst_filename,
     circle1 = Circle((0, 0), 1.0, edgecolor='k', fill=False, facecolor='none', alpha=0.3)
     ax.add_artist(circle1)
 
-    cimg = ax.imshow(img, origin='lower', cmap=cm.Spectral_r, extent=(-1, 1, -1, 1),
+    cimg = ax.imshow(img, origin='lower', cmap=cm.Spectral_r, extent=(1, -1, -1, 1),
                      clip_path=circle1, clip_on=True, vmin=sky_vmin, vmax=sky_vmax)
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.2, axes_class=maxes.Axes)
     fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.1e")
+
+    ax.set_xlim(1, -1)
 
     ax.set_xticks(np.arange(-1, 1.1, 0.5))
     ax.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
     ax.set_yticks(np.arange(-1, 1.1, 0.5))
     ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
-    for body, lmn in marked_bodies_lmn.items():
-        ax.plot([-lmn[0]], [lmn[1]], marker='x', color='white', mew=0.5)
-
     # Labels
     ax.set_xlabel('$ℓ$', fontsize=14)
     ax.set_ylabel('$m$', fontsize=14)
 
     for body_name, lmn in marked_bodies_lmn.items():
-        ax.annotate(body_name, (-lmn[0], lmn[1]))
+        ax.plot([lmn[0]], [lmn[1]], marker='x', color='white', mew=0.5)
+        ax.annotate(body_name, (lmn[0], lmn[1]))
 
     ax.set_title(f"Sky image for {station_name}\nSB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}", fontsize=16)
 
