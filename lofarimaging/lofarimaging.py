@@ -27,8 +27,10 @@ from astropy.time import Time
 import lofarantpos
 from packaging import version
 
+from .maputil import get_map, make_leaflet_map
+
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
-           "rcus_in_station", "read_acm_cube", "get_map", "nearfield_imager",
+           "rcus_in_station", "read_acm_cube", "nearfield_imager",
            "sky_imager", "ground_imager", "get_station_pqr", "skycoord_to_lmn", "make_ground_image"]
 
 __version__ = "1.5.0"
@@ -233,60 +235,6 @@ def read_acm_cube(filename: str, station_type: str):
     data = np.fromfile(filename, dtype=np.complex128)
     time_slots = int(len(data) / num_rcu / num_rcu)
     return data.reshape((time_slots, num_rcu, num_rcu))
-
-
-def get_map(lon_min, lon_max, lat_min, lat_max, zoom=19):
-    """
-    Get an ESRI World Imagery map of the selected region
-    Args:
-        lon_min: Minimum longitude (degrees)
-        lon_max: Maximum longitude (degrees)
-        lat_min: Minimum latitude (degrees)
-        lat_max: Maximum latitude (degrees)
-        zoom: Zoom level
-
-    Returns:
-        np.array: Numpy array which can be plotted with plt.imshow
-    """
-    from owslib.wmts import WebMapTileService
-    import mercantile
-
-    upperleft_tile = mercantile.tile(lon_min, lat_max, zoom)
-    xmin, ymin = upperleft_tile.x, upperleft_tile.y
-    lowerright_tile = mercantile.tile(lon_max, lat_min, zoom)
-    xmax, ymax = lowerright_tile.x, lowerright_tile.y
-
-    total_image = np.zeros([256 * (ymax - ymin + 1), 256 * (xmax - xmin + 1), 3], dtype='uint8')
-
-    if not os.path.isdir("tilecache"):
-        os.mkdir("tilecache")
-
-    tile_min = mercantile.tile(lon_min, lat_min, zoom)
-    tile_max = mercantile.tile(lon_max, lat_max, zoom)
-
-    wmts = WebMapTileService("http://server.arcgisonline.com/arcgis/rest/" +
-                             "services/World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml")
-
-    for x in range(tile_min.x, tile_max.x + 1):
-        for y in range(tile_max.y, tile_min.y + 1):
-            tilename = os.path.join("tilecache", f"World_Imagery_{zoom}_{x}_{y}.jpg")
-            if not os.path.isfile(tilename):
-                tile = wmts.gettile(layer="World_Imagery", tilematrix=str(zoom), row=y, column=x)
-                out = open(tilename, "wb")
-                out.write(tile.read())
-                out.close()
-            tile_image = imread(tilename)
-            total_image[(y - ymin) * 256: (y - ymin + 1) * 256,
-                        (x - xmin) * 256: (x - xmin + 1) * 256] = tile_image
-
-    total_llmin = {'lon': mercantile.bounds(xmin, ymax, zoom).west, 'lat': mercantile.bounds(xmin, ymax, zoom).south}
-    total_llmax = {'lon': mercantile.bounds(xmax, ymin, zoom).east, 'lat': mercantile.bounds(xmax, ymin, zoom).north}
-
-    pix_xmin = int(round(np.interp(lon_min, [total_llmin['lon'], total_llmax['lon']], [0, total_image.shape[1]])))
-    pix_ymin = int(round(np.interp(lat_min, [total_llmin['lat'], total_llmax['lat']], [0, total_image.shape[0]])))
-    pix_xmax = int(round(np.interp(lon_max, [total_llmin['lon'], total_llmax['lon']], [0, total_image.shape[1]])))
-    pix_ymax = int(round(np.interp(lat_max, [total_llmin['lat'], total_llmax['lat']], [0, total_image.shape[0]])))
-    return total_image[total_image.shape[0] - pix_ymax: total_image.shape[0] - pix_ymin, pix_xmin: pix_xmax]
 
 
 SPEED_OF_LIGHT = 299792458.0
@@ -658,9 +606,6 @@ def make_ground_image(xst_filename,
     [maxpixel_p, maxpixel_q, _] = pqr_to_xyz.T @ np.array([maxpixel_x, maxpixel_y, height])
     maxpixel_lon, maxpixel_lat, _ = lofargeotiff.pqr_to_longlatheight([maxpixel_p, maxpixel_q], station_name)
 
-    plt.imsave(f"results/tmp.png", img,
-               cmap=cmap_with_alpha, origin='lower', vmin=ground_vmin, vmax=ground_vmax)
-
     # Show location of maximum if not at the image border
     if 2 < maxpixel_xpix < npix_x - 2 and 2 < maxpixel_ypix < npix_y - 2:
         print(f"Maximum at {maxpixel_x:.0f}m east, {maxpixel_y:.0f}m north of station center " +
@@ -688,22 +633,4 @@ def make_ground_image(xst_filename,
                                (pmin, qmin), (pmax, qmax), stationname=station_name,
                                obsdate=obstime, tags=tags)
 
-    m = folium.Map(location=[lat_center, lon_center], zoom_start=19,
-                   tiles='http://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/MapServer/' +
-                         'tile/{z}/{y}/{x}',
-                   attr='ESRI')
-    folium.TileLayer(tiles="OpenStreetMap").add_to(m)
-
-    folium.raster_layers.ImageOverlay(
-            name='Near field image',
-            image=folium_overlay,
-            bounds=[[lat_min, lon_min], [lat_max, lon_max]],
-            opacity=opacity,
-            interactive=True,
-            cross_origin=False,
-            zindex=1
-    ).add_to(m)
-
-    folium.LayerControl().add_to(m)
-
-    return m
+    return make_leaflet_map(folium_overlay, lon_center, lat_center, lon_min, lat_min, lon_max, lat_max)
