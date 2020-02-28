@@ -535,7 +535,7 @@ def make_ground_image(xst_filename,
             marked_bodies_lmn[body_name] = skycoord_to_lmn(marked_bodies[body_name], zenith)
 
     # Plot the resulting sky image
-    fig, ax = plt.subplots(1)
+    fig, ax = plt.subplots(figsize=(10, 10))
 
     circle1 = Circle((0, 0), 1.0, edgecolor='k', fill=False, facecolor='none', alpha=0.3)
     ax.add_artist(circle1)
@@ -561,7 +561,10 @@ def make_ground_image(xst_filename,
         ax.plot([lmn[0]], [lmn[1]], marker='x', color='white', mew=0.5)
         ax.annotate(body_name, (lmn[0], lmn[1]))
 
-    ax.set_title(f"Sky image for {station_name}\nSB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}", fontsize=16)
+    ax.text(0.5, 1.05, f"Sky image for {station_name}",
+            fontsize=17, ha='center', va='bottom', transform=ax.transAxes)
+    ax.text(0.5, 1.02, f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
+            fontsize=12, ha='center', va='bottom', transform=ax.transAxes)
 
     # Plot the compass directions
     ax.text(0.9, 0, 'W', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
@@ -623,8 +626,10 @@ def make_ground_image(xst_filename,
     ax.set_xlabel('$W-E$ (metres)', fontsize=14)
     ax.set_ylabel('$S-N$ (metres)', fontsize=14)
 
-    ax.set_title(f"Near field image for {station_name}\nSB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
-                 fontsize=16)
+    ax.text(0.5, 1.05, f"Near field image for {station_name}",
+            fontsize=17, ha='center', va='bottom', transform=ax.transAxes)
+    ax.text(0.5, 1.02, f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
+            fontsize=12, ha='center', va='bottom', transform=ax.transAxes)
 
     # Change limits to match the original specified extent in the localnorth frame
     ax.set_xlim(extent[0], extent[1])
