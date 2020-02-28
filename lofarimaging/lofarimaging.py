@@ -28,7 +28,7 @@ import lofarantpos
 from packaging import version
 
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
-           "rcus_in_station", "read_acm_cube", "get_background_image", "nearfield_imager",
+           "rcus_in_station", "read_acm_cube", "get_map", "nearfield_imager",
            "sky_imager", "ground_imager", "get_station_pqr", "skycoord_to_lmn", "make_ground_image"]
 
 __version__ = "1.5.0"
@@ -235,7 +235,7 @@ def read_acm_cube(filename: str, station_type: str):
     return data.reshape((time_slots, num_rcu, num_rcu))
 
 
-def get_background_image(lon_min, lon_max, lat_min, lat_max, zoom=19):
+def get_map(lon_min, lon_max, lat_min, lat_max, zoom=19):
     """
     Get an ESRI World Imagery map of the selected region
     Args:
@@ -598,7 +598,7 @@ def make_ground_image(xst_filename,
     lon_min, lat_min, _ = lofargeotiff.pqr_to_longlatheight([pmin, qmin, 0], station_name)
     lon_max, lat_max, _ = lofargeotiff.pqr_to_longlatheight([pmax, qmax, 0], station_name)
 
-    background_image = get_background_image(lon_min, lon_max, lat_min, lat_max, zoom=map_zoom)
+    background_image = get_map(lon_min, lon_max, lat_min, lat_max, zoom=map_zoom)
 
     # Make colors semi-transparent in the lower 3/4 of the scale
     cmap = cm.Spectral_r
