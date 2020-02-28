@@ -15,7 +15,7 @@ from lofarantpos.db import LofarAntennaDatabase
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib import cm
-from matplotlib.colors import ListedColormap
+from matplotlib.colors import ListedColormap, Normalize
 import warnings
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.axes as maxes
@@ -601,7 +601,7 @@ def make_ground_image(xst_filename,
     lon_min, lat_min, _ = lofargeotiff.pqr_to_longlatheight([pmin, qmin, 0], station_name)
     lon_max, lat_max, _ = lofargeotiff.pqr_to_longlatheight([pmax, qmax, 0], station_name)
 
-    background_image = get_map(lon_min, lon_max, lat_min, lat_max, zoom=map_zoom)
+    background_map = get_map(lon_min, lon_max, lat_min, lat_max, zoom=map_zoom)
 
     # Make colors semi-transparent in the lower 3/4 of the scale
     cmap = cm.Spectral_r
@@ -612,7 +612,7 @@ def make_ground_image(xst_filename,
     # Plot the resulting image
     fig = plt.figure(figsize=(10, 10), constrained_layout=True)
     ax = fig.add_subplot(111, ymargin=-0.4)
-    ax.imshow(background_image, extent=extent)
+    ax.imshow(background_map, extent=extent)
     cimg = ax.imshow(img, origin='lower', cmap=cmap_with_alpha, extent=extent,
                      alpha=0.7, vmin=ground_vmin, vmax=ground_vmax)
 
@@ -648,6 +648,9 @@ def make_ground_image(xst_filename,
     ax.grid(True, alpha=0.3)
     plt.savefig(f"results/{fname}_nearfield_calibrated.png", bbox_inches='tight', dpi=200)
     plt.close(fig)
+
+    vmin, vmax = cimg.get_clim()
+    folium_overlay = cmap_with_alpha(Normalize(vmin=vmin, vmax=vmax)(img))[::-1, :]
 
     maxpixel_ypix, maxpixel_xpix = np.unravel_index(np.argmax(img), img.shape)
     maxpixel_x = np.interp(maxpixel_xpix, [0, npix_x], [extent[0], extent[1]])
@@ -693,7 +696,7 @@ def make_ground_image(xst_filename,
 
     folium.raster_layers.ImageOverlay(
             name='Near field image',
-            image=f"results/tmp.png",
+            image=folium_overlay,
             bounds=[[lat_min, lon_min], [lat_max, lon_max]],
             opacity=opacity,
             interactive=True,
