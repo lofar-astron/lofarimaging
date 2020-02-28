@@ -128,11 +128,11 @@ def find_caltable(field_name: str, rcu_mode: str, config_dir='caltables'):
 
     # If the original folder structure is kept
     if rcu_mode == 'outer' and 'LBA' in field_name:
-        filename = os.path.join(config_dir, f"{station}/CalTable-{station_number}-LBA_OUTER-10_90.dat")
+        filename = os.path.join(config_dir, station, f"CalTable-{station_number}-LBA_OUTER-10_90.dat")
     elif rcu_mode == 'inner' and 'LBA' in field_name:
-        filename = os.path.join(config_dir, f"{station}/CalTable-{station_number}-LBA_INNER-10_90.dat")
+        filename = os.path.join(config_dir, station, f"CalTable-{station_number}-LBA_INNER-10_90.dat")
     else:
-        filename = os.path.join(config_dir, f"{station}/CalTable_{station_number}_mode{rcu_mode}.dat")
+        filename = os.path.join(config_dir, station, f"CalTable_{station_number}_mode{rcu_mode}.dat")
 
     if os.path.exists(filename):
         return filename
@@ -410,7 +410,7 @@ def make_ground_image(xst_filename,
     ax.text(0, 0.9, 'N', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
     ax.text(0, -0.9, 'S', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
 
-    plt.savefig(f'results/{fname}_sky_calibrated.png', bbox_inches='tight', dpi=200)
+    plt.savefig(os.path.join('results', f'{fname}_sky_calibrated.png'), bbox_inches='tight', dpi=200)
     plt.close(fig)
 
     if sky_only:
@@ -484,7 +484,7 @@ def make_ground_image(xst_filename,
     ax.contour(img, np.linspace(ground_vmin_img, ground_vmax_img, 15), origin='lower', cmap=cm.Greys,
                extent=extent, linewidths=0.5, alpha=opacity)
     ax.grid(True, alpha=0.3)
-    plt.savefig(f"results/{fname}_nearfield_calibrated.png", bbox_inches='tight', dpi=200)
+    plt.savefig(os.path.join("results", f"{fname}_nearfield_calibrated.png"), bbox_inches='tight', dpi=200)
     plt.close(fig)
 
     vmin, vmax = cimg.get_clim()
@@ -519,7 +519,7 @@ def make_ground_image(xst_filename,
             tags["calibration_date"] = cal_header["CalTableHeader.Calibration.Date"]
         if "CalTableHeader.Comment" in cal_header:
             tags["calibration_comment"] = cal_header["CalTableHeader.Comment"]
-    lofargeotiff.write_geotiff(img, f"results/{fname}_nearfield_calibrated.tiff",
+    lofargeotiff.write_geotiff(img, os.path.join("results", f"{fname}_nearfield_calibrated.tiff"),
                                (pmin, qmin), (pmax, qmax), stationname=station_name,
                                obsdate=obstime, tags=tags)
 
