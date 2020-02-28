@@ -631,8 +631,18 @@ def make_ground_image(xst_filename,
     plt.savefig(f"results/{fname}_nearfield_calibrated.png", bbox_inches='tight', dpi=200)
     plt.close(fig)
 
+    maxpixel_ypix, maxpixel_xpix = np.unravel_index(np.argmax(img), img.shape)
+    maxpixel_x = np.interp(maxpixel_xpix, [0, npix_x], [extent[0], extent[1]])
+    maxpixel_y = np.interp(maxpixel_ypix, [0, npix_y], [extent[2], extent[3]])
+    [maxpixel_p, maxpixel_q, _] = pqr_to_xyz.T @ np.array([maxpixel_x, maxpixel_y, height])
+    maxpixel_lon, maxpixel_lat, _ = lofargeotiff.pqr_to_longlatheight([maxpixel_p, maxpixel_q], station_name)
+
     plt.imsave(f"results/tmp.png", img,
                cmap=cmap_with_alpha, origin='lower', vmin=ground_vmin, vmax=ground_vmax)
+
+    # Show location of maximum if not at the image border
+    if 2 < maxpixel_xpix < npix_x - 2 and 2 < maxpixel_ypix < npix_y - 2:
+        print(f"Maximum at {maxpixel_x:.0f}m east, {maxpixel_y:.0f}m north of station center (lat/long {maxpixel_lat:.5f}, {maxpixel_lon:.5f})")
 
     obstime = datetime.datetime.strptime(obsdatestr + ":" + obstimestr, '%Y%m%d:%H%M%S')
 
