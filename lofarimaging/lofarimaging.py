@@ -248,8 +248,6 @@ def get_background_image(lon_min, lon_max, lat_min, lat_max, zoom=19):
     from owslib.wmts import WebMapTileService
     import mercantile
 
-    wmts = WebMapTileService("http://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml")
-
     upperleft_tile = mercantile.tile(lon_min, lat_max, zoom)
     xmin, ymin = upperleft_tile.x, upperleft_tile.y
     lowerright_tile = mercantile.tile(lon_max, lat_min, zoom)
@@ -257,16 +255,23 @@ def get_background_image(lon_min, lon_max, lat_min, lat_max, zoom=19):
 
     total_image = np.zeros([256 * (ymax - ymin + 1), 256 * (xmax - xmin + 1), 3], dtype='uint8')
 
+    if not os.path.isdir("tilecache"):
+        os.mkdir("tilecache")
+
     tile_min = mercantile.tile(lon_min, lat_min, zoom)
     tile_max = mercantile.tile(lon_max, lat_max, zoom)
 
+    wmts = WebMapTileService("http://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml")
+
     for x in range(tile_min.x, tile_max.x + 1):
         for y in range(tile_max.y, tile_min.y + 1):
-            tile = wmts.gettile(layer="World_Imagery", tilematrix=str(zoom), row=y, column=x)
-            out = open("tmp.jpg", "wb")
-            out.write(tile.read())
-            out.close()
-            tile_image = imread("tmp.jpg")
+            tilename = os.path.join("tilecache", f"World_Imagery_{zoom}_{x}_{y}.jpg")
+            if not os.path.isfile(tilename):
+                tile = wmts.gettile(layer="World_Imagery", tilematrix=str(zoom), row=y, column=x)
+                out = open(tilename, "wb")
+                out.write(tile.read())
+                out.close()
+            tile_image = imread(tilename)
             total_image[(y - ymin) * 256: (y - ymin + 1) * 256,
                         (x - xmin) * 256: (x - xmin + 1) * 256] = tile_image
 
