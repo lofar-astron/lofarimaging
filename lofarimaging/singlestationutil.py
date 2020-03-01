@@ -20,6 +20,8 @@ from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, get_sun
 import astropy.units as u
 from astropy.time import Time
 
+from typing import List
+
 import lofarantpos
 from packaging import version
 
@@ -345,7 +347,6 @@ def make_ground_image(xst_filename,
     # Fourier transform, and account for the rotation (rotation is positive in this space)
     # visibilities = cube_xx[2,:,:]
     img = sky_imager(visibilities, baselines, freq, npix_l, npix_m)
-    img = ndimage.interpolation.rotate(img, -rotation, reshape=False, mode='nearest')
 
     obstime_astropy = Time(obstime)
     # Determine positions of Cas A and Cyg A
@@ -396,7 +397,7 @@ def make_ground_image(xst_filename,
     ax.set_ylabel('$m$', fontsize=14)
 
     for body_name, lmn in marked_bodies_lmn.items():
-        ax.plot([lmn[0]], [lmn[1]], marker='x', color='white', mew=0.5)
+        ax.plot([lmn[0]], [lmn[1]], marker='x', color='black', mew=0.5)
         ax.annotate(body_name, (lmn[0], lmn[1]))
 
     ax.text(0.5, 1.05, f"Sky image for {station_name}",
