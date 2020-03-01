@@ -103,38 +103,42 @@ def freq_from_sb(sb: int, rcu_mode='1'):
 def find_caltable(field_name: str, rcu_mode: str, config_dir='caltables'):
     """
     Find the file of a caltable.
-
     Args:
         field_name: Name of the antenna field, e.g. 'DE602LBA'
         rcu_mode: Receiver mode for which the calibration table is requested.
             Probably should be  'inner' or 'outer'
         config_dir: Root directory under which station information is stored in
             subdirectories DE602C/etc/, RS106/etc/, ...
-
     Returns:
         str: filename if it exists, None if nothing found
     """
     station, field = field_name[0:5].upper(), field_name[5:].upper()
     station_number = station[2:5]
-
     # Map to the correct file depending on the RCU mode
     if rcu_mode == 'outer' and 'LBA' in field_name:
         filename = os.path.join(config_dir, f"CalTable-{station_number}-LBA_OUTER-10_90.dat")
     elif rcu_mode == 'inner' and 'LBA' in field_name:
         filename = os.path.join(config_dir, f"CalTable-{station_number}-LBA_INNER-10_90.dat")
-    else:
-        filename = os.path.join(config_dir, f"CalTable_{station_number}_mode{rcu_mode}.dat")
+    elif rcu_mode == '5' and 'HBA' in field_name:
+        filename = os.path.join(config_dir, f"CalTable-{station_number}-HBA-110_190.dat")
+    elif rcu_mode == '6' and 'HBA' in field_name:
+        filename = os.path.join(config_dir, f"CalTable-{station_number}-HBA-170_230.dat")
+    elif rcu_mode == '7' and 'HBA' in field_name:
+        filename = os.path.join(config_dir, f"CalTable-{station_number}-HBA-210_250.dat")
 
     if os.path.exists(filename):
         return filename
-
     # If the original folder structure is kept
     if rcu_mode == 'outer' and 'LBA' in field_name:
-        filename = os.path.join(config_dir, station, f"CalTable-{station_number}-LBA_OUTER-10_90.dat")
+        filename = os.path.join(config_dir, f"{station}/CalTable-{station_number}-LBA_OUTER-10_90.dat")
     elif rcu_mode == 'inner' and 'LBA' in field_name:
-        filename = os.path.join(config_dir, station, f"CalTable-{station_number}-LBA_INNER-10_90.dat")
-    else:
-        filename = os.path.join(config_dir, station, f"CalTable_{station_number}_mode{rcu_mode}.dat")
+        filename = os.path.join(config_dir, f"{station}/CalTable-{station_number}-LBA_INNER-10_90.dat")
+    elif rcu_mode == '5' and 'HBA' in field_name:
+        filename = os.path.join(config_dir, f"{station}/CalTable-{station_number}-HBA-110_190.dat")
+    elif rcu_mode == '6' and 'HBA' in field_name:
+        filename = os.path.join(config_dir, f"{station}/CalTable-{station_number}-HBA-170_230.dat")
+    elif rcu_mode == '7' and 'HBA' in field_name:
+        filename = os.path.join(config_dir, f"{station}/CalTable-{station_number}-HBA-210_250.dat")
 
     if os.path.exists(filename):
         return filename
