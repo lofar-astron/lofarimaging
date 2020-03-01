@@ -267,10 +267,7 @@ def make_ground_image(xst_filename,
     else:
         station_type = "intl"
 
-    try:
-        os.mkdir('results')
-    except FileExistsError:
-        pass
+    os.makedirs('results', exist_ok=True)
 
     # Distill metadata from filename
     obsdatestr, obstimestr, _, rcu_mode, _, subbandname = cubename.rstrip(".dat").split("_")
