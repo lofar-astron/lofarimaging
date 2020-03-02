@@ -5,8 +5,6 @@ import os
 import datetime
 import lofargeotiff
 
-from scipy import ndimage
-
 from lofarantpos.db import LofarAntennaDatabase
 
 import matplotlib.pyplot as plt
@@ -14,13 +12,14 @@ from matplotlib.ticker import FormatStrFormatter
 from matplotlib import cm
 from matplotlib.colors import ListedColormap, Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib.patches import Circle
 import matplotlib.axes as maxes
 
 from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, get_sun
 import astropy.units as u
 from astropy.time import Time
 
-from typing import List
+from typing import List, Dict, Any
 
 import lofarantpos
 from packaging import version
@@ -31,7 +30,7 @@ from .lofarimaging import nearfield_imager, sky_imager, skycoord_to_lmn
 
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_station_pqr",
-           "make_ground_image"]
+           "make_ground_image", "make_sky_plot"]
 
 __version__ = "1.5.0"
 
@@ -241,6 +240,62 @@ def get_station_pqr(station_name: str, station_type: str, array_type: str, db):
     return station_pqr.astype('float32')
 
 
+def make_sky_plot(image: np.array, marked_bodies_lmn: Dict[str, Any],
+                  title: str = "Sky plot", subtitle: str = "", fig: plt.Figure = None,
+                  **kwargs):
+    """
+
+    Args:
+        image: numpy array (two dimensions with data)
+        marked_bodies_lmn: dict with objects to annotate (values should be lmn coordinates)
+        title: Title for the plot
+        subtitle: Subtitle for the plot
+        fig: existing figure object to be reused
+        **kwargs: other options to be passed to plt.imshow (e.g. vmin)
+
+    Returns:
+        list of matplotlib added to the axes
+    """
+    if fig is None:
+        fig = plt.figure(figsize=(10, 10))
+
+    ax = fig.add_subplot(1, 1, 1)
+    circle1 = Circle((0, 0), 1.0, edgecolor='k', fill=False, facecolor='none', alpha=0.3)
+    ax.add_artist(circle1)
+
+    cimg = ax.imshow(image, origin='lower', cmap=cm.Spectral_r, extent=(1, -1, -1, 1),
+                     clip_path=circle1, clip_on=True, **kwargs)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.2, axes_class=maxes.Axes)
+    fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.1e")
+
+    ax.set_xlim(1, -1)
+
+    ax.set_xticks(np.arange(-1, 1.1, 0.5))
+    ax.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+    ax.set_yticks(np.arange(-1, 1.1, 0.5))
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+
+    # Labels
+    ax.set_xlabel('$ℓ$', fontsize=14)
+    ax.set_ylabel('$m$', fontsize=14)
+
+    ax.text(0.5, 1.05, title, fontsize=17, ha='center', va='bottom', transform=ax.transAxes)
+    ax.text(0.5, 1.02, subtitle, fontsize=12, ha='center', va='bottom', transform=ax.transAxes)
+
+    for body_name, lmn in marked_bodies_lmn.items():
+        ax.plot([lmn[0]], [lmn[1]], marker='x', color='black', mew=0.5)
+        ax.annotate(body_name, (lmn[0], lmn[1]))
+
+    # Plot the compass directions
+    ax.text(0.9, 0, 'E', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
+    ax.text(-0.9, 0, 'W', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
+    ax.text(0, 0.9, 'N', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
+    ax.text(0, -0.9, 'S', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
+
+    return fig
+
+
 def make_ground_image(xst_filename,
                       station_name,
                       caltable_dir,
@@ -342,10 +397,7 @@ def make_ground_image(xst_filename,
 
     baselines = station_xyz[:, np.newaxis, :] - station_xyz[np.newaxis, :, :]
 
-    # Make a sky image, by numerically Fourier-transforming from visibilities to image plane
-    from matplotlib.patches import Circle
-
-    # Fourier transform, and account for the rotation (rotation is positive in this space)
+    # Fourier transform
     # visibilities = cube_xx[2,:,:]
     img = sky_imager(visibilities, baselines, freq, npix_l, npix_m)
 
@@ -375,44 +427,12 @@ def make_ground_image(xst_filename,
             marked_bodies_lmn[body_name] = skycoord_to_lmn(marked_bodies[body_name], zenith)
 
     # Plot the resulting sky image
-    fig, ax = plt.subplots(figsize=(10, 10))
+    fig = plt.figure(figsize=(10, 10))
 
-    circle1 = Circle((0, 0), 1.0, edgecolor='k', fill=False, facecolor='none', alpha=0.3)
-    ax.add_artist(circle1)
+    make_sky_plot(img, marked_bodies_lmn, title=f"Sky image for {station_name}",
+                  subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}", fig=fig)
 
-    cimg = ax.imshow(img, origin='lower', cmap=cm.Spectral_r, extent=(1, -1, -1, 1),
-                     clip_path=circle1, clip_on=True, vmin=sky_vmin, vmax=sky_vmax)
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.2, axes_class=maxes.Axes)
-    fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.1e")
-
-    ax.set_xlim(1, -1)
-
-    ax.set_xticks(np.arange(-1, 1.1, 0.5))
-    ax.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-    ax.set_yticks(np.arange(-1, 1.1, 0.5))
-    ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-
-    # Labels
-    ax.set_xlabel('$ℓ$', fontsize=14)
-    ax.set_ylabel('$m$', fontsize=14)
-
-    for body_name, lmn in marked_bodies_lmn.items():
-        ax.plot([lmn[0]], [lmn[1]], marker='x', color='black', mew=0.5)
-        ax.annotate(body_name, (lmn[0], lmn[1]))
-
-    ax.text(0.5, 1.05, f"Sky image for {station_name}",
-            fontsize=17, ha='center', va='bottom', transform=ax.transAxes)
-    ax.text(0.5, 1.02, f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
-            fontsize=12, ha='center', va='bottom', transform=ax.transAxes)
-
-    # Plot the compass directions
-    ax.text(0.9, 0, 'E', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
-    ax.text(-0.9, 0, 'W', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
-    ax.text(0, 0.9, 'N', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
-    ax.text(0, -0.9, 'S', horizontalalignment='center', verticalalignment='center', color='w', fontsize=17)
-
-    plt.savefig(os.path.join('results', f'{fname}_sky_calibrated.png'), bbox_inches='tight', dpi=200)
+    fig.savefig(os.path.join('results', f'{fname}_sky_calibrated.png'), bbox_inches='tight', dpi=200)
     plt.close(fig)
 
     if sky_only:
@@ -486,7 +506,7 @@ def make_ground_image(xst_filename,
     ax.contour(img, np.linspace(ground_vmin_img, ground_vmax_img, 15), origin='lower', cmap=cm.Greys,
                extent=extent, linewidths=0.5, alpha=opacity)
     ax.grid(True, alpha=0.3)
-    plt.savefig(os.path.join("results", f"{fname}_nearfield_calibrated.png"), bbox_inches='tight', dpi=200)
+    fig.savefig(os.path.join("results", f"{fname}_nearfield_calibrated.png"), bbox_inches='tight', dpi=200)
     plt.close(fig)
 
     vmin, vmax = cimg.get_clim()
