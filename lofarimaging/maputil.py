@@ -35,8 +35,7 @@ def get_map(lon_min, lon_max, lat_min, lat_max, zoom=19):
 
     total_image = np.zeros([256 * (ymax - ymin + 1), 256 * (xmax - xmin + 1), 3], dtype='uint8')
 
-    if not os.path.isdir("tilecache"):
-        os.mkdir("tilecache")
+    os.makedirs("tilecache", exist_ok=True)
 
     tile_min = mercantile.tile(lon_min, lat_min, zoom)
     tile_max = mercantile.tile(lon_max, lat_max, zoom)
