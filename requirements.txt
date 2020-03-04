@@ -1,0 +1,10 @@
+numpy
+numexpr
+numba
+astropy
+lofargeotiff
+lofarantpos>=0.4.0
+matplotlib
+folium
+mercantile
+owslib
