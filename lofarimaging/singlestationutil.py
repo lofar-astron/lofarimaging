@@ -30,7 +30,7 @@ from .lofarimaging import nearfield_imager, sky_imager, skycoord_to_lmn
 
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_station_pqr",
-           "make_ground_image", "make_sky_plot", "make_ground_plot"]
+           "make_sky_plot", "make_ground_plot", "make_xst_plots"]
 
 __version__ = "1.5.0"
 
@@ -364,20 +364,20 @@ def make_sky_plot(image: np.array, marked_bodies_lmn: Dict[str, np.array],
     return fig
 
 
-def make_ground_image(xst_filename,
-                      station_name,
-                      caltable_dir,
-                      extent=None,
-                      pixels_per_metre=0.5,
-                      sky_vmin=None,
-                      sky_vmax=None,
-                      ground_vmin=None,
-                      ground_vmax=None,
-                      height=1.5,
-                      map_zoom=19,
-                      sky_only=False,
-                      opacity=0.6):
-    """Make a ground image"""
+def make_xst_plots(xst_filename,
+                   station_name,
+                   caltable_dir="caltables",
+                   extent=None,
+                   pixels_per_metre=0.5,
+                   sky_vmin=None,
+                   sky_vmax=None,
+                   ground_vmin=None,
+                   ground_vmax=None,
+                   height=1.5,
+                   map_zoom=19,
+                   sky_only=False,
+                   opacity=0.6):
+    """Make a sky image and a ground image from an XST file"""
     cubename = os.path.basename(xst_filename)
 
     if extent is None:
@@ -498,7 +498,8 @@ def make_ground_image(xst_filename,
     fig = plt.figure(figsize=(10, 10))
 
     make_sky_plot(img, marked_bodies_lmn, title=f"Sky image for {station_name}",
-                  subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}", fig=fig)
+                  subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}", fig=fig,
+                  vmin=sky_vmin, vmax=sky_vmax)
 
     fig.savefig(os.path.join('results', f'{fname}_sky_calibrated.png'), bbox_inches='tight', dpi=200)
     plt.close(fig)
@@ -534,7 +535,7 @@ def make_ground_image(xst_filename,
     fig, folium_overlay = make_ground_plot(img, background_map, extent,
                                            title=f"Near field image for {station_name}",
                                            subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
-                                           opacity=opacity)
+                                           opacity=opacity, vmin=ground_vmin, vmax=ground_vmax)
 
     fig.savefig(os.path.join("results", f"{fname}_nearfield_calibrated.png"), bbox_inches='tight', dpi=200)
     plt.close(fig)
