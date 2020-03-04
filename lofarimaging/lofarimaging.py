@@ -35,7 +35,7 @@ def skycoord_to_lmn(pos: SkyCoord, phasecentre: SkyCoord):
     return dc.y.value, dc.z.value, dc.x.value - 1
 
 
-@numba.jit(parallel=True, nopython=False)
+@numba.jit(parallel=True)
 def sky_imager(visibilities, baselines, freq, npix_l, npix_m):
     """
     Sky imager
@@ -50,7 +50,7 @@ def sky_imager(visibilities, baselines, freq, npix_l, npix_m):
     Returns:
         np.array(float): Real valued array of shape [npix_l, npix_m]
     """
-    img = np.zeros([npix_m, npix_l], dtype=np.complex128)
+    img = np.zeros((npix_m, npix_l), dtype=np.complex128)
 
     for m_ix in range(npix_m):
         m = -1 + m_ix * 2 / npix_m
