@@ -57,7 +57,8 @@ def sky_imager(visibilities, baselines, freq, npix_l, npix_m):
         for l_ix in range(npix_l):
             l = 1 - l_ix * 2 / npix_l
             img[m_ix, l_ix] = np.mean(visibilities * np.exp(-2j * np.pi * freq *
-                                                            (baselines[:, :, 0] * l + baselines[:, :, 1] * m)  / SPEED_OF_LIGHT))
+                                                            (baselines[:, :, 0] * l + baselines[:, :, 1] * m) /
+                                                            SPEED_OF_LIGHT))
     return np.real(img)
 
 

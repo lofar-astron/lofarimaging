@@ -5,6 +5,8 @@ import os
 import folium
 import numpy as np
 from matplotlib.pyplot import imread
+from owslib.wmts import WebMapTileService
+import mercantile
 
 __all__ = ["get_map", "make_leaflet_map"]
 
@@ -25,9 +27,6 @@ def get_map(lon_min, lon_max, lat_min, lat_max, zoom=19):
     Returns:
         np.array: Numpy array which can be plotted with plt.imshow
     """
-    from owslib.wmts import WebMapTileService
-    import mercantile
-
     upperleft_tile = mercantile.tile(lon_min, lat_max, zoom)
     xmin, ymin = upperleft_tile.x, upperleft_tile.y
     lowerright_tile = mercantile.tile(lon_max, lat_min, zoom)
@@ -67,7 +66,7 @@ def get_map(lon_min, lon_max, lat_min, lat_max, zoom=19):
 
 
 def make_leaflet_map(overlay_array: np.array, lon_center: float, lat_center: float, lon_min: float, lat_min: float,
-                    lon_max: float, lat_max: float, opacity=0.7):
+                     lon_max: float, lat_max: float, opacity=0.7):
     """
     Show an image in a leaflet map, using Folium
 
