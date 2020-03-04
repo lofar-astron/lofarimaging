@@ -23,6 +23,8 @@ def skycoord_to_lmn(pos: SkyCoord, phasecentre: SkyCoord):
     * l,m a tangential plane of the sky sphere
 
     Note that this means that l increases east-wards
+
+    This function was taken from https://github.com/SKA-ScienceDataProcessor/algorithm-reference-library
     """
 
     # Determine relative sky position

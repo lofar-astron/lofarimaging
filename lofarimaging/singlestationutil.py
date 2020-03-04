@@ -19,7 +19,7 @@ from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, get_sun
 import astropy.units as u
 from astropy.time import Time
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 import lofarantpos
 from packaging import version
@@ -30,7 +30,7 @@ from .lofarimaging import nearfield_imager, sky_imager, skycoord_to_lmn
 
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_station_pqr",
-           "make_ground_image", "make_sky_plot"]
+           "make_ground_image", "make_sky_plot", "make_ground_plot"]
 
 __version__ = "1.5.0"
 
@@ -240,10 +240,78 @@ def get_station_pqr(station_name: str, station_type: str, array_type: str, db):
     return station_pqr.astype('float32')
 
 
-def make_sky_plot(image: np.array, marked_bodies_lmn: Dict[str, Any],
-                  title: str = "Sky plot", subtitle: str = "", fig: plt.Figure = None,
-                  **kwargs):
+def make_ground_plot(image: np.array, background_map: np.array, extent: List[int], title: str = "Ground plot",
+                     subtitle: str = "", opacity: float = 0.6, fig: plt.Figure = None, **kwargs) -> Tuple[plt.Figure, np.array]:
     """
+    Make a ground plot of an array with data
+
+    Args:
+        image: numpy array (two dimensions with data)
+        background_map: background map
+        title: Title for the plot
+        subtitle: Subtitle for the plot
+        opacity: maximum opacity of the plot
+        fig: exisiting figure object to be reused
+        **kwargs: other options to be passed to plt.imshow (e.g. vmin)
+
+    Returns:
+        Updated figure and numpy array with only the plot
+    """
+    if fig is None:
+        fig = plt.figure(figsize=(10, 10), constrained_layout=True)
+
+    # Make colors semi-transparent in the lower 3/4 of the scale
+    cmap = cm.Spectral_r
+    cmap_with_alpha = cmap(np.arange(cmap.N))
+    cmap_with_alpha[:, -1] = np.clip(np.linspace(0, 1.5, cmap.N), 0., 1.)
+    cmap_with_alpha = ListedColormap(cmap_with_alpha)
+
+    # Plot the resulting image
+    ax = fig.add_subplot(111, ymargin=-0.4)
+    ax.imshow(background_map, extent=extent)
+    cimg = ax.imshow(image, origin='lower', cmap=cmap_with_alpha, extent=extent,
+                     alpha=opacity, **kwargs)
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.2, axes_class=maxes.Axes)
+    cbar = fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.1e")
+    cbar.set_alpha(1.0)
+    cbar.draw_all()
+    # cbar.set_ticks([])
+
+    ax.set_xlabel('$W-E$ (metres)', fontsize=14)
+    ax.set_ylabel('$S-N$ (metres)', fontsize=14)
+
+    ax.text(0.5, 1.05, title, fontsize=17, ha='center', va='bottom', transform=ax.transAxes)
+    ax.text(0.5, 1.02, subtitle, fontsize=12, ha='center', va='bottom', transform=ax.transAxes)
+
+    # Change limits to match the original specified extent in the localnorth frame
+    ax.set_xlim(extent[0], extent[1])
+    ax.set_ylim(extent[2], extent[3])
+    ax.tick_params(axis='both', which='both', length=0)
+
+    # Place the NSEW coordinate directions
+    ax.text(0.95, 0.5, 'E', color='w', fontsize=18, transform=ax.transAxes, ha='center', va='center')
+    ax.text(0.05, 0.5, 'W', color='w', fontsize=18, transform=ax.transAxes, ha='center', va='center')
+    ax.text(0.5, 0.95, 'N', color='w', fontsize=18, transform=ax.transAxes, ha='center', va='center')
+    ax.text(0.5, 0.05, 'S', color='w', fontsize=18, transform=ax.transAxes, ha='center', va='center')
+
+    ground_vmin_img, ground_vmax_img = cimg.get_clim()
+    ax.contour(image, np.linspace(ground_vmin_img, ground_vmax_img, 15), origin='lower', cmap=cm.Greys,
+               extent=extent, linewidths=0.5, alpha=opacity)
+    ax.grid(True, alpha=0.3)
+
+    vmin, vmax = cimg.get_clim()
+    raw_plotdata = cmap_with_alpha(Normalize(vmin=vmin, vmax=vmax)(image))[::-1, :]
+
+    return fig, raw_plotdata
+
+
+def make_sky_plot(image: np.array, marked_bodies_lmn: Dict[str, np.array],
+                  title: str = "Sky plot", subtitle: str = "", fig: plt.Figure = None,
+                  **kwargs) -> plt.Figure:
+    """
+    Make a sky plot out of an array with data
 
     Args:
         image: numpy array (two dimensions with data)
@@ -254,7 +322,7 @@ def make_sky_plot(image: np.array, marked_bodies_lmn: Dict[str, Any],
         **kwargs: other options to be passed to plt.imshow (e.g. vmin)
 
     Returns:
-        list of matplotlib added to the axes
+        Updated figure
     """
     if fig is None:
         fig = plt.figure(figsize=(10, 10))
@@ -463,54 +531,13 @@ def make_ground_image(xst_filename,
 
     background_map = get_map(lon_min, lon_max, lat_min, lat_max, zoom=map_zoom)
 
-    # Make colors semi-transparent in the lower 3/4 of the scale
-    cmap = cm.Spectral_r
-    cmap_with_alpha = cmap(np.arange(cmap.N))
-    cmap_with_alpha[:, -1] = np.clip(np.linspace(0, 1.5, cmap.N), 0., 1.)
-    cmap_with_alpha = ListedColormap(cmap_with_alpha)
+    fig, folium_overlay = make_ground_plot(img, background_map, extent,
+                                           title=f"Near field image for {station_name}",
+                                           subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
+                                           opacity=opacity)
 
-    # Plot the resulting image
-    fig = plt.figure(figsize=(10, 10), constrained_layout=True)
-    ax = fig.add_subplot(111, ymargin=-0.4)
-    ax.imshow(background_map, extent=extent)
-    cimg = ax.imshow(img, origin='lower', cmap=cmap_with_alpha, extent=extent,
-                     alpha=0.7, vmin=ground_vmin, vmax=ground_vmax)
-
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.2, axes_class=maxes.Axes)
-    cbar = fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.1e")
-    cbar.set_alpha(1.0)
-    cbar.draw_all()
-    # cbar.set_ticks([])
-
-    ax.set_xlabel('$W-E$ (metres)', fontsize=14)
-    ax.set_ylabel('$S-N$ (metres)', fontsize=14)
-
-    ax.text(0.5, 1.05, f"Near field image for {station_name}",
-            fontsize=17, ha='center', va='bottom', transform=ax.transAxes)
-    ax.text(0.5, 1.02, f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
-            fontsize=12, ha='center', va='bottom', transform=ax.transAxes)
-
-    # Change limits to match the original specified extent in the localnorth frame
-    ax.set_xlim(extent[0], extent[1])
-    ax.set_ylim(extent[2], extent[3])
-    ax.tick_params(axis='both', which='both', length=0)
-
-    # Place the NSEW coordinate directions
-    ax.text(0.95, 0.5, 'E', color='w', fontsize=18, transform=ax.transAxes, ha='center', va='center')
-    ax.text(0.05, 0.5, 'W', color='w', fontsize=18, transform=ax.transAxes, ha='center', va='center')
-    ax.text(0.5, 0.95, 'N', color='w', fontsize=18, transform=ax.transAxes, ha='center', va='center')
-    ax.text(0.5, 0.05, 'S', color='w', fontsize=18, transform=ax.transAxes, ha='center', va='center')
-
-    ground_vmin_img, ground_vmax_img = cimg.get_clim()
-    ax.contour(img, np.linspace(ground_vmin_img, ground_vmax_img, 15), origin='lower', cmap=cm.Greys,
-               extent=extent, linewidths=0.5, alpha=opacity)
-    ax.grid(True, alpha=0.3)
     fig.savefig(os.path.join("results", f"{fname}_nearfield_calibrated.png"), bbox_inches='tight', dpi=200)
     plt.close(fig)
-
-    vmin, vmax = cimg.get_clim()
-    folium_overlay = cmap_with_alpha(Normalize(vmin=vmin, vmax=vmax)(img))[::-1, :]
 
     maxpixel_ypix, maxpixel_xpix = np.unravel_index(np.argmax(img), img.shape)
     maxpixel_x = np.interp(maxpixel_xpix, [0, npix_x], [extent[0], extent[1]])
