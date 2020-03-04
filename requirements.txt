@@ -8,3 +8,5 @@ matplotlib
 folium
 mercantile
 owslib
+packaging
+Pillow
