@@ -30,7 +30,7 @@ Open the notebook in a Jupyter notebook (or Jupyterlab) instance. You can start 
 ### Notes
 This code ships with an example XST-dataset (`20170720_095816_mode_3_xst_sb297.dat`), obtained using station DE603LBA, specifically collecting data in subband 297 (58 MHz). It should run on any other XST-dataset, provided the station name is changed accordingly. By default, the code visualises timestep #0 of the 30 timesteps of integration, but this can also be modified to any other time slice.
 
-### Release: Version 5
+### Release: Version 1.5
 
  * Overlay the ground plot on a satellite image (both in a static PNG and as a Leaflet overlay in the notebook)
  * Annotate CygA, CasA and Sun on the sky plot
@@ -41,8 +41,8 @@ This code ships with an example XST-dataset (`20170720_095816_mode_3_xst_sb297.d
  * Speed up the code somewhat by using numba and numexpr
  * Move some code from the notebook to a python file
 
-### Release: Version 4
+### Release: Version 1.4
 Update to automatically parse some information from data file names, based on the wrapper script written by Mattia Mancini for recording station data (e.g. https://svn.astron.nl/viewvc/LOFAR/trunk/LCU/StationTest/rspctlprobe.py). Some formatting removed for compatibility with different operating systems. To obtain the LOFAR antenna database needed for antenna positions, please install: `pip install lofarantpos`.
 
-### Release: Version 3
+### Release: Version 1.3
 Notebook has been updated to include station calibration for LBA (HBA to come later). This requires the "caltables" folder to be in the same directory as the notebook, but that can be changed as long as the location is changed also in the function. The calibration tables themselves are not included in this repository due to their size, but you can access them [here](http://astron.nl/~moss/caltables.zip) (~65 MB download): , or download them from their [repository](https://svn.astron.nl/Station/trunk/CalTables).
