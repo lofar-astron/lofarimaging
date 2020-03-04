@@ -2,6 +2,7 @@
 
 import numpy as np
 import numexpr as ne
+import numba
 from astropy.coordinates import SkyCoord, SkyOffsetFrame, CartesianRepresentation
 
 
@@ -34,16 +35,30 @@ def skycoord_to_lmn(pos: SkyCoord, phasecentre: SkyCoord):
     return dc.y.value, dc.z.value, dc.x.value - 1
 
 
+@numba.jit(parallel=True)
 def sky_imager(visibilities, baselines, freq, npix_l, npix_m):
-    """Do a Fourier transform for sky imaging"""
-    img = np.zeros([npix_m, npix_l], dtype=np.complex128)
+    """
+    Sky imager
 
-    for m_ix, m in enumerate(np.linspace(-1, 1, npix_l)):
-        for l_ix, l in enumerate(np.linspace(1, -1, npix_m)):
-            img[m_ix, l_ix] = np.mean(visibilities *
-                                      np.exp(-2j * np.pi * freq *
-                                             (baselines[:, :, 0] * l + baselines[:, :, 1] * m) / SPEED_OF_LIGHT))
-    return np.abs(img)
+    Args:
+        visibilities: Numpy array with visibilities, shape [num_antennas x num_antennas]
+        baselines: Numpy array with distances between antennas, shape [num_antennas, num_antennas, 3]
+        freq: frequency
+        npix_l: Number of pixels in l-direction
+        npix_m: Number of pixels in m-direction
+
+    Returns:
+        np.array(float): Real valued array of shape [npix_l, npix_m]
+    """
+    img = np.zeros([npix_m, npix_l], dtype=np.complex128)
+    """Do a Fourier transform for sky imaging"""
+    for m_ix in range(npix_m):
+        m = -1 + m_ix * 2 / npix_m
+        for l_ix in range(npix_l):
+            l = 1 - l_ix * 2 / npix_l
+            img[m_ix, l_ix] = np.mean(visibilities * np.exp(-2j * np.pi * freq *
+                                                            (baselines[:, :, 0] * l + baselines[:, :, 1] * m)  / SPEED_OF_LIGHT))
+    return np.real(img)
 
 
 def ground_imager(visibilities, freq, npix_p, npix_q, dims, station_pqr, height=1.5):
@@ -63,6 +78,7 @@ def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, exte
                      max_memory_mb=200):
     """
     Nearfield imager
+
     Args:
         visibilities: Numpy array with visibilities, shape [num_visibilities x num_frequencies]
         baseline_indices: List with tuples of antenna numbers in visibilities, shape [2 x num_visibilities]
@@ -75,7 +91,7 @@ def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, exte
         max_memory_mb: Maximum amount of memory to use for the biggest array. Higher may improve performance.
 
     Returns:
-        array(float): Real-values array of shape [npix_p, npix_q]
+        np.array(complex): Complex valued array of shape [npix_p, npix_q]
     """
     z = height
     x = np.linspace(extent[0], extent[1], npix_p)
