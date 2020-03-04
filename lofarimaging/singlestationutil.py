@@ -534,7 +534,7 @@ def make_ground_image(xst_filename,
             "height": height,
             "station": station_name,
             "pixels_per_metre": pixels_per_metre}
-    if cal_header is not None:
+    if caltable_filename is not None:
         if "CalTableHeader.Observation.Date" in cal_header:
             tags["calibration_obsdate"] = cal_header["CalTableHeader.Observation.Date"]
         if "CalTableHeader.Calibration.Date" in cal_header:
