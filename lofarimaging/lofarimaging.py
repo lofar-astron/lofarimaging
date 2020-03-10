@@ -125,7 +125,7 @@ def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, exte
 
             # v[:,np.newaxis,np.newaxis]*np.exp(-2j*np.pi*freq/c*groundbase_pixels[:,:,:]/c)
             # groundbase_pixels=nvis x npix x npix
-            np.add(img, np.sum(ne.evaluate("(v * exp(j2pi * bl_diff_chunk / lamb)"),axis=0), out=img)
+            np.add(img, np.sum(ne.evaluate("v * exp(j2pi * bl_diff_chunk / lamb)"),axis=0), out=img)
     img /= len(freqs) * len(baseline_indices)
 
     return img
