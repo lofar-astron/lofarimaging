@@ -76,6 +76,7 @@ def ground_imager(visibilities, freq, npix_p, npix_q, dims, station_pqr, height=
             groundbase = antdist[:, np.newaxis] - antdist[np.newaxis, :]
             img[q_ix, p_ix] = np.mean(visibilities * np.exp(-2j * np.pi * freq * (-groundbase) / SPEED_OF_LIGHT))
 
+    return img
 
 def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, extent, station_pqr, height=1.5,
                      max_memory_mb=200):
