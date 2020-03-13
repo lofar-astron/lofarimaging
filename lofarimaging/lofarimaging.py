@@ -78,6 +78,7 @@ def ground_imager(visibilities, freq, npix_p, npix_q, dims, station_pqr, height=
 
     return img
 
+
 def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, extent, station_pqr, height=1.5,
                      max_memory_mb=200):
     """
