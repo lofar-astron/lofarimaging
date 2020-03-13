@@ -471,7 +471,7 @@ def make_xst_plots(xst_filename: str,
         Maximum at -6m east, 70m north of station center (lat/long 50.97998, 11.71118)
 
         >>> type(leafletmap)
-         <class 'folium.folium.Map'>
+        <class 'folium.folium.Map'>
     """
     cubename = os.path.basename(xst_filename)
 
