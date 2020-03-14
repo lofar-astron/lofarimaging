@@ -5,9 +5,11 @@ name: Python package
 
 on:
   push:
-    branches: [ master ]
+    branches:
+    - '*'
   pull_request:
-    branches: [ master ]
+    branches:
+    - 'master'
 
 jobs:
   build:
@@ -43,3 +45,7 @@ jobs:
       with:
         file: coverage.xml
         fail_ci_if_error: true
+    - name: Test notebook
+      run: |
+        pip install nbconvert
+        jupyter nbconvert --to html --execute lofarimaging.ipynb
