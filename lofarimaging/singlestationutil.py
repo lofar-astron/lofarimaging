@@ -10,6 +10,7 @@ from lofarantpos.db import LofarAntennaDatabase
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib import cm
+from matplotlib.figure import Figure
 from matplotlib.colors import ListedColormap, Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.patches import Circle
@@ -159,7 +160,7 @@ def find_caltable(field_name: str, rcu_mode: Union[str, int], config_dir='caltab
         return None
 
 
-def read_caltable(filename: str, num_subbands=512):
+def read_caltable(filename: str, num_subbands=512) -> Tuple[Dict[str, str], np.ndarray]:
     """
     Read a station's calibration table.
 
@@ -168,7 +169,7 @@ def read_caltable(filename: str, num_subbands=512):
         num_subbands: Number of subbands
 
     Returns:
-        Tuple(Dict[str, str], np.array): A tuple containing a dict with
+        Tuple[Dict[str, str], np.ndarray]: A tuple containing a dict with
             the header lines, and a 2D numpy.array of complex numbers
             representing the station gain coefficients.
     """
@@ -299,9 +300,9 @@ def get_station_pqr(station_name: str, array_type: str, db):
     return station_pqr.astype('float32')
 
 
-def make_ground_plot(image: np.array, background_map: np.array, extent: List[int], title: str = "Ground plot",
-                     subtitle: str = "", opacity: float = 0.6, fig: plt.Figure = None, **kwargs) \
-        -> Tuple[plt.Figure, np.array]:
+def make_ground_plot(image: np.ndarray, background_map: np.ndarray, extent: List[float], title: str = "Ground plot",
+                     subtitle: str = "", opacity: float = 0.6, fig: Figure = None, **kwargs) \
+        -> Tuple[Figure, np.ndarray]:
     """
     Make a ground plot of an array with data
 
@@ -373,9 +374,9 @@ def make_ground_plot(image: np.array, background_map: np.array, extent: List[int
     return fig, raw_plotdata
 
 
-def make_sky_plot(image: np.array, marked_bodies_lmn: Dict[str, np.array],
-                  title: str = "Sky plot", subtitle: str = "", fig: plt.Figure = None,
-                  **kwargs) -> plt.Figure:
+def make_sky_plot(image: np.ndarray, marked_bodies_lmn: Dict[str, Tuple[float, float, float]],
+                  title: str = "Sky plot", subtitle: str = "", fig: Figure = None,
+                  **kwargs) -> Figure:
     """
     Make a sky plot out of an array with data
 
