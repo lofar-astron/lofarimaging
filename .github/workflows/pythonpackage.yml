@@ -47,5 +47,6 @@ jobs:
         fail_ci_if_error: true
     - name: Test notebook
       run: |
-        pip install nbconvert jupyter_client
+        pip install nbconvert jupyter_client ipykernel
+        python -m ipykernel install --user
         jupyter nbconvert --to html --execute lofarimaging.ipynb
