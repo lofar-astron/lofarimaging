@@ -90,13 +90,13 @@ def make_leaflet_map(overlay_array: np.array, lon_center: float, lat_center: flo
     folium.TileLayer(tiles="OpenStreetMap").add_to(m)
 
     folium.raster_layers.ImageOverlay(
-            name='Near field image',
-            image=overlay_array,
-            bounds=[[lat_min, lon_min], [lat_max, lon_max]],
-            opacity=opacity,
-            interactive=True,
-            cross_origin=False,
-            zindex=1
+        name='Near field image',
+        image=overlay_array,
+        bounds=[[lat_min, lon_min], [lat_max, lon_max]],
+        opacity=opacity,
+        interactive=True,
+        cross_origin=False,
+        zindex=1
     ).add_to(m)
 
     folium.LayerControl().add_to(m)

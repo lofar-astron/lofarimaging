@@ -301,7 +301,7 @@ def get_station_pqr(station_name: str, array_type: str, db):
 
 def make_ground_plot(image: np.array, background_map: np.array, extent: List[int], title: str = "Ground plot",
                      subtitle: str = "", opacity: float = 0.6, fig: plt.Figure = None, **kwargs) \
-                     -> Tuple[plt.Figure, np.array]:
+        -> Tuple[plt.Figure, np.array]:
     """
     Make a ground plot of an array with data
 
