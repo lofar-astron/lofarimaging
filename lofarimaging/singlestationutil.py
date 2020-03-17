@@ -264,7 +264,7 @@ def get_station_pqr(station_name: str, array_type: str, db):
 
     Args:
         station_name: Station name, e.g. DE603LBA
-        array_type: Array type, one of 'inner' or 'outer' (ignored for HBA)
+        array_type: Array type or RCU mode, one of 'inner' or 'outer', or 0-6
         db: instance of LofarAntennaDatabase from lofarantpos
 
     Example:
@@ -277,6 +277,11 @@ def get_station_pqr(station_name: str, array_type: str, db):
         1.7434713
     """
     station_type = get_station_type(station_name)
+
+    if array_type in (1, 2, '1', '2'):
+        array_type = 'outer'
+    elif array_type in (3, 4, '3', '4'):
+        array_type = 'inner'
 
     if 'LBA' in station_name:
         # Get the PQR positions for an individual station
@@ -492,10 +497,16 @@ def make_xst_plots(xst_filename: str,
     array_type = None
     if rcu_mode in ('1', '2'):
         array_type = 'outer'
+        if len(station_name) == 5:
+            station_name += "LBA"
     elif rcu_mode in ('3', '4'):
         array_type = 'inner'
+        if len(station_name) == 5:
+            station_name += "LBA"
     elif rcu_mode in ('5', '6', '7'):
         array_type = rcu_mode
+        if len(station_name) == 5:
+            station_name += "HBA"
     else:
         raise Exception("Unexpected rcu_mode: ", rcu_mode)
 
