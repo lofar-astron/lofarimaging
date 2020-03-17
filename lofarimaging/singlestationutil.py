@@ -258,13 +258,13 @@ def get_station_type(station_name: str) -> str:
         return "intl"
 
 
-def get_station_pqr(station_name: str, array_type: str, db):
+def get_station_pqr(station_name: str, rcu_mode: Union[str, int], db):
     """
     Get PQR coordinates for the relevant subset of antennas in a station.
 
     Args:
         station_name: Station name, e.g. DE603LBA
-        array_type: Array type or RCU mode, one of 'inner' or 'outer', or 0-6
+        rcu_mode: RCU mode (0 - 6, can be string)
         db: instance of LofarAntennaDatabase from lofarantpos
 
     Example:
@@ -278,19 +278,14 @@ def get_station_pqr(station_name: str, array_type: str, db):
     """
     station_type = get_station_type(station_name)
 
-    if array_type in (1, 2, '1', '2'):
-        array_type = 'outer'
-    elif array_type in (3, 4, '3', '4'):
-        array_type = 'inner'
-
     if 'LBA' in station_name:
         # Get the PQR positions for an individual station
         station_pqr = db.antenna_pqr(station_name)
 
         # Exception: for Dutch stations (sparse not yet accommodated)
-        if (station_type == 'core' or station_type == 'remote') and array_type == 'inner':
+        if (station_type == 'core' or station_type == 'remote') and int(rcu_mode) in (3, 4):
             station_pqr = station_pqr[0:48, :]
-        elif (station_type == 'core' or station_type == 'remote') and array_type == 'outer':
+        elif (station_type == 'core' or station_type == 'remote') and int(rcu_mode) in (1,2):
             station_pqr = station_pqr[48:, :]
     elif 'HBA' in station_name:
         selected_dipole_config = {
@@ -494,17 +489,13 @@ def make_xst_plots(xst_filename: str,
 
     # Needed for NL stations: inner (rcu_mode 3/4), outer (rcu_mode 1/2), (sparse tbd)
     # Should be set to 'inner' if station type = 'intl'
-    array_type = None
     if rcu_mode in ('1', '2'):
-        array_type = 'outer'
         if len(station_name) == 5:
             station_name += "LBA"
     elif rcu_mode in ('3', '4'):
-        array_type = 'inner'
         if len(station_name) == 5:
             station_name += "LBA"
     elif rcu_mode in ('5', '6', '7'):
-        array_type = rcu_mode
         if len(station_name) == 5:
             station_name += "HBA"
     else:
@@ -528,7 +519,7 @@ def make_xst_plots(xst_filename: str,
 
     # Apply calibration
 
-    caltable_filename = find_caltable(station_name, rcu_mode=array_type,
+    caltable_filename = find_caltable(station_name, rcu_mode=rcu_mode,
                                       config_dir=caltable_dir)
 
     cal_header = None
@@ -554,7 +545,7 @@ def make_xst_plots(xst_filename: str,
     # Setup the database
     db = LofarAntennaDatabase()
 
-    station_pqr = get_station_pqr(station_name, array_type, db)
+    station_pqr = get_station_pqr(station_name, rcu_mode, db)
 
     # Rotate station_pqr to a north-oriented xyz frame, where y points North, in a plane through the station.
     rotation = db.rotation_from_north(station_name)
