@@ -117,7 +117,7 @@ def find_caltable(field_name: str, rcu_mode: Union[str, int], caltable_dir='calt
     Find the file of a caltable.
 
     Args:
-        field_name: Name of the antenna field, e.g. 'DE602LBA'
+        field_name: Name of the antenna field, e.g. 'DE602LBA' or 'DE602'
         rcu_mode: Receiver mode for which the calibration table is requested.
             Probably should be  'inner' or 'outer'
         caltable_dir: Root directory under which station information is stored in
@@ -137,15 +137,15 @@ def find_caltable(field_name: str, rcu_mode: Union[str, int], caltable_dir='calt
 
     filename = f"CalTable-{station_number}"
 
-    if str(rcu_mode) in ('outer', '1', '2') and 'LBA' in field_name:
+    if str(rcu_mode) in ('outer', '1', '2'):
         filename += "-LBA_OUTER-10_90.dat"
-    elif str(rcu_mode) in ('inner', '3', '4') and 'LBA' in field_name:
+    elif str(rcu_mode) in ('inner', '3', '4'):
         filename += "-LBA_INNER-10_90.dat"
-    elif str(rcu_mode) == '5' and 'HBA' in field_name:
+    elif str(rcu_mode) == '5':
         filename += "-HBA-110_190.dat"
-    elif str(rcu_mode) == '6' and 'HBA' in field_name:
+    elif str(rcu_mode) == '6':
         filename += "-HBA-170_230.dat"
-    elif str(rcu_mode) == '7' and 'HBA' in field_name:
+    elif str(rcu_mode) == '7':
         filename += "-HBA-210_250.dat"
     else:
         raise RuntimeError("Unexpected mode: " + str(rcu_mode) + " for field_name " + str(field_name))
