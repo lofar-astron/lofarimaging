@@ -119,7 +119,6 @@ def find_caltable(field_name: str, rcu_mode: Union[str, int], caltable_dir='calt
     Args:
         field_name: Name of the antenna field, e.g. 'DE602LBA'
         rcu_mode: Receiver mode for which the calibration table is requested.
-            Probably should be  'inner' or 'outer'
         caltable_dir: Root directory under which station information is stored in
             subdirectories DE602C/etc/, RS106/etc/, ...
     Returns:
@@ -137,15 +136,15 @@ def find_caltable(field_name: str, rcu_mode: Union[str, int], caltable_dir='calt
 
     filename = f"CalTable-{station_number}"
 
-    if str(rcu_mode) in ('outer', '1', '2') and 'LBA' in field_name:
+    if str(rcu_mode) in ('outer', '1', '2'):
         filename += "-LBA_OUTER-10_90.dat"
-    elif str(rcu_mode) in ('inner', '3', '4') and 'LBA' in field_name:
+    elif str(rcu_mode) in ('inner', '3', '4'):
         filename += "-LBA_INNER-10_90.dat"
-    elif str(rcu_mode) == '5' and 'HBA' in field_name:
+    elif str(rcu_mode) == '5':
         filename += "-HBA-110_190.dat"
-    elif str(rcu_mode) == '6' and 'HBA' in field_name:
+    elif str(rcu_mode) == '6':
         filename += "-HBA-170_230.dat"
-    elif str(rcu_mode) == '7' and 'HBA' in field_name:
+    elif str(rcu_mode) == '7':
         filename += "-HBA-210_250.dat"
     else:
         raise RuntimeError("Unexpected mode: " + str(rcu_mode) + " for field_name " + str(field_name))
@@ -287,7 +286,7 @@ def get_station_type(station_name: str) -> str:
         str: station type, one of 'intl', 'core' or 'remote'
 
     Example:
-        >>> get_station_type("DE603LBA")
+        >>> get_station_type("DE603")
         'intl'
     """
     if station_name[0] == "C":
@@ -303,37 +302,42 @@ def get_station_pqr(station_name: str, rcu_mode: Union[str, int], db):
     Get PQR coordinates for the relevant subset of antennas in a station.
 
     Args:
-        station_name: Station name, e.g. DE603LBA
+        station_name: Station name, e.g. 'DE603LBA' or 'DE603'
         rcu_mode: RCU mode (0 - 6, can be string)
         db: instance of LofarAntennaDatabase from lofarantpos
 
     Example:
         >>> from lofarantpos.db import LofarAntennaDatabase
         >>> db = LofarAntennaDatabase()
-        >>> pqr = get_station_pqr("DE603LBA", "outer", db)
+        >>> pqr = get_station_pqr("DE603", "outer", db)
         >>> pqr.shape
         (96, 3)
         >>> pqr[0, 0]
         1.7434713
-    """
-    station_type = get_station_type(station_name)
 
-    if 'LBA' in station_name:
+        >>> pqr = get_station_pqr("LV614", "5", db)
+        >>> pqr.shape
+        (96, 3)
+    """
+    full_station_name = get_full_station_name(station_name, rcu_mode)
+    station_type = get_station_type(full_station_name)
+
+    if 'LBA' in station_name or str(rcu_mode) in ('1', '2', '3', '4', 'inner', 'outer'):
         # Get the PQR positions for an individual station
-        station_pqr = db.antenna_pqr(station_name)
+        station_pqr = db.antenna_pqr(full_station_name)
 
         # Exception: for Dutch stations (sparse not yet accommodated)
         if (station_type == 'core' or station_type == 'remote') and int(rcu_mode) in (3, 4):
             station_pqr = station_pqr[0:48, :]
         elif (station_type == 'core' or station_type == 'remote') and int(rcu_mode) in (1,2):
             station_pqr = station_pqr[48:, :]
-    elif 'HBA' in station_name:
+    elif 'HBA' in station_name or str(rcu_mode) in ('5', '6', '7', '8'):
         selected_dipole_config = {
             'intl': GENERIC_INT_201512, 'remote': GENERIC_REMOTE_201512, 'core': GENERIC_CORE_201512
         }
         selected_dipoles = selected_dipole_config[station_type] + \
             np.arange(len(selected_dipole_config[station_type])) * 16
-        station_pqr = db.hba_dipole_pqr(station_name)[selected_dipoles]
+        station_pqr = db.hba_dipole_pqr(full_station_name)[selected_dipoles]
     else:
         raise RuntimeError("Station name did not contain LBA or HBA, could not load antenna positions")
 
@@ -359,7 +363,7 @@ def make_ground_plot(image: np.ndarray, background_map: np.ndarray, extent: List
         Updated figure and numpy array with only the plot
 
     Example:
-        >>> dummy_image = np.zeros((150, 150))
+        >>> dummy_image = np.random.rand(150, 150)
         >>> fig, plot_array = make_ground_plot(dummy_image, dummy_image, [-300, 300, -100, 100])
         >>> plot_array.shape
         (150, 150, 4)
@@ -475,6 +479,48 @@ def make_sky_plot(image: np.ndarray, marked_bodies_lmn: Dict[str, Tuple[float, f
     return fig
 
 
+def get_full_station_name(station_name: str, rcu_mode: Union[str, int]) -> str:
+    """
+    Get full station name with the field appended, e.g. DE603LBA
+
+    Args:
+        station_name (str): Short station name, e.g. 'DE603'
+        rcu_mode (Union[str, int]): RCU mode
+
+    Returns:
+        str: Full station name, e.g. DE603LBA
+
+    Example:
+        >>> get_full_station_name("DE603", '3')
+        'DE603LBA'
+
+        >>> get_full_station_name("LV614", 5)
+        'LV614HBA'
+
+        >>> get_full_station_name("CS013LBA", 1)
+        'CS013LBA'
+
+        >>> get_full_station_name("CS002", 1)
+        'CS002LBA'
+    """
+    if len(station_name) > 5:
+        return station_name
+
+    if str(rcu_mode) in ('1', '2', 'outer'):
+        if len(station_name) == 5:
+            station_name += "LBA"
+    elif str(rcu_mode) in ('3', '4', 'inner'):
+        if len(station_name) == 5:
+            station_name += "LBA"
+    elif str(rcu_mode) in ('5', '6', '7'):
+        if len(station_name) == 5:
+            station_name += "HBA"
+    else:
+        raise Exception("Unexpected rcu_mode: ", rcu_mode)
+
+    return station_name
+
+
 def make_xst_plots(xst_filename: str,
                    station_name: str,
                    caltable_dir: str = "CalTables",
@@ -527,20 +573,6 @@ def make_xst_plots(xst_filename: str,
     obsdatestr, obstimestr, _, rcu_mode, _, subbandname = cubename.rstrip(".dat").split("_")
     subband = int(subbandname[2:])
 
-    # Needed for NL stations: inner (rcu_mode 3/4), outer (rcu_mode 1/2), (sparse tbd)
-    # Should be set to 'inner' if station type = 'intl'
-    if rcu_mode in ('1', '2'):
-        if len(station_name) == 5:
-            station_name += "LBA"
-    elif rcu_mode in ('3', '4'):
-        if len(station_name) == 5:
-            station_name += "LBA"
-    elif rcu_mode in ('5', '6', '7'):
-        if len(station_name) == 5:
-            station_name += "HBA"
-    else:
-        raise Exception("Unexpected rcu_mode: ", rcu_mode)
-
     # Get the data
     fname = f"{obsdatestr}_{obstimestr}_{station_name}_SB{subband}"
 
@@ -579,6 +611,8 @@ def make_xst_plots(xst_filename: str,
     pqr_to_xyz = np.array([[np.cos(-rotation), -np.sin(-rotation), 0],
                            [np.sin(-rotation), np.cos(-rotation), 0],
                            [0, 0, 1]])
+
+    station_name = get_full_station_name(station_name, rcu_mode)
 
     station_xyz = (pqr_to_xyz @ station_pqr.T).T
 
