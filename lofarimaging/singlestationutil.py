@@ -31,7 +31,8 @@ from .lofarimaging import nearfield_imager, sky_imager, skycoord_to_lmn
 
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_station_pqr", "get_station_type",
-           "make_sky_plot", "make_ground_plot", "make_xst_plots", "apply_calibration"]
+           "make_sky_plot", "make_ground_plot", "make_xst_plots", "apply_calibration",
+           "get_full_station_name"]
 
 __version__ = "1.5.0"
 
