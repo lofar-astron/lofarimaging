@@ -238,6 +238,7 @@ def apply_calibration(visibilities: np.ndarray, station_name: str, rcu_mode: Uni
 
     return visibilities, calibration_info
 
+
 def rcus_in_station(station_type: str):
     """
     Give the number of RCUs in a station, given its type.
@@ -330,7 +331,7 @@ def get_station_pqr(station_name: str, rcu_mode: Union[str, int], db):
         # Exception: for Dutch stations (sparse not yet accommodated)
         if (station_type == 'core' or station_type == 'remote') and int(rcu_mode) in (3, 4):
             station_pqr = station_pqr[0:48, :]
-        elif (station_type == 'core' or station_type == 'remote') and int(rcu_mode) in (1,2):
+        elif (station_type == 'core' or station_type == 'remote') and int(rcu_mode) in (1, 2):
             station_pqr = station_pqr[48:, :]
     elif 'HBA' in station_name or str(rcu_mode) in ('5', '6', '7', '8'):
         selected_dipole_config = {
