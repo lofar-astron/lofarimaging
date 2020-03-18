@@ -118,7 +118,7 @@ def find_caltable(field_name: str, rcu_mode: Union[str, int], caltable_dir='calt
     Find the file of a caltable.
 
     Args:
-        field_name: Name of the antenna field, e.g. 'DE602LBA'
+        field_name: Name of the antenna field, e.g. 'DE602LBA' or 'DE602'
         rcu_mode: Receiver mode for which the calibration table is requested.
         caltable_dir: Root directory under which station information is stored in
             subdirectories DE602C/etc/, RS106/etc/, ...
