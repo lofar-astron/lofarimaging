@@ -10,3 +10,4 @@ mercantile
 owslib
 packaging
 Pillow
+opcua
