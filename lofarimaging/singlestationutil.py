@@ -555,8 +555,8 @@ def make_xst_plots(xst_filename: str,
         Leaflet map (that renders as an interactive map in a notebook)
 
     Example:
-        >>> leafletmap = make_xst_plots("test/20170720_095816_mode_3_xst_sb297.dat", \
-                                        "DE603LBA", caltable_dir="test/CalTables")
+        >>> sky_fig, ground_fig, leafletmap = make_xst_plots("test/20170720_095816_mode_3_xst_sb297.dat", \
+                                                             "DE603LBA", caltable_dir="test/CalTables")
         Maximum at -6m east, 70m north of station center (lat/long 50.97998, 11.71118)
 
         >>> type(leafletmap)
@@ -607,6 +607,8 @@ def make_xst_plots(xst_filename: str,
 
     station_pqr = get_station_pqr(station_name, rcu_mode, db)
 
+    station_name = get_full_station_name(station_name, rcu_mode)
+
     # Rotate station_pqr to a north-oriented xyz frame, where y points North, in a plane through the station.
     rotation = db.rotation_from_north(station_name)
 
@@ -614,15 +616,13 @@ def make_xst_plots(xst_filename: str,
                            [np.sin(-rotation), np.cos(-rotation), 0],
                            [0, 0, 1]])
 
-    station_name = get_full_station_name(station_name, rcu_mode)
-
     station_xyz = (pqr_to_xyz @ station_pqr.T).T
 
     baselines = station_xyz[:, np.newaxis, :] - station_xyz[np.newaxis, :, :]
 
     # Fourier transform
     # visibilities = cube_xx[2,:,:]
-    img = sky_imager(visibilities, baselines, freq, npix_l, npix_m)
+    sky_img = sky_imager(visibilities, baselines, freq, npix_l, npix_m)
 
     obstime_astropy = Time(obstime)
     # Determine positions of Cas A and Cyg A
@@ -650,17 +650,17 @@ def make_xst_plots(xst_filename: str,
             marked_bodies_lmn[body_name] = skycoord_to_lmn(marked_bodies[body_name], zenith)
 
     # Plot the resulting sky image
-    fig = plt.figure(figsize=(10, 10))
+    sky_fig = plt.figure(figsize=(10, 10))
 
-    make_sky_plot(img, marked_bodies_lmn, title=f"Sky image for {station_name}",
-                  subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}", fig=fig,
+    make_sky_plot(sky_img, marked_bodies_lmn, title=f"Sky image for {station_name}",
+                  subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}", fig=sky_fig,
                   vmin=sky_vmin, vmax=sky_vmax)
 
-    fig.savefig(os.path.join('results', f'{fname}_sky_calibrated.png'), bbox_inches='tight', dpi=200)
-    plt.close(fig)
+    sky_fig.savefig(os.path.join('results', f'{fname}_sky_calibrated.png'), bbox_inches='tight', dpi=200)
+    plt.close(sky_fig)
 
     if sky_only:
-        return img
+        return sky_fig
 
     npix_x, npix_y = int(ground_resolution * (extent[1] - extent[0])), int(ground_resolution * (extent[3] - extent[2]))
 
@@ -671,12 +671,12 @@ def make_xst_plots(xst_filename: str,
 
     visibilities_selection = visibilities[baseline_indices]
 
-    img = nearfield_imager(visibilities_selection.flatten()[:, np.newaxis],
-                           np.array(baseline_indices).T,
-                           [freq], npix_x, npix_y, extent, station_xyz, height=height)
+    ground_img = nearfield_imager(visibilities_selection.flatten()[:, np.newaxis],
+                                  np.array(baseline_indices).T,
+                                  [freq], npix_x, npix_y, extent, station_xyz, height=height)
 
     # Correct for taking only lower triangular part
-    img = np.real(2 * img)
+    ground_img = np.real(2 * ground_img)
 
     # Convert bottom left and upper right to PQR just for lofargeo
     pmin, qmin, _ = pqr_to_xyz.T @ (np.array([extent[0], extent[2], 0]))
@@ -687,15 +687,15 @@ def make_xst_plots(xst_filename: str,
 
     background_map = get_map(lon_min, lon_max, lat_min, lat_max, zoom=map_zoom)
 
-    fig, folium_overlay = make_ground_plot(img, background_map, extent,
+    ground_fig, folium_overlay = make_ground_plot(ground_img, background_map, extent,
                                            title=f"Near field image for {station_name}",
                                            subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
                                            opacity=opacity, vmin=ground_vmin, vmax=ground_vmax)
 
-    fig.savefig(os.path.join("results", f"{fname}_nearfield_calibrated.png"), bbox_inches='tight', dpi=200)
-    plt.close(fig)
+    ground_fig.savefig(os.path.join("results", f"{fname}_nearfield_calibrated.png"), bbox_inches='tight', dpi=200)
+    plt.close(sky_fig)
 
-    maxpixel_ypix, maxpixel_xpix = np.unravel_index(np.argmax(img), img.shape)
+    maxpixel_ypix, maxpixel_xpix = np.unravel_index(np.argmax(ground_img), ground_img.shape)
     maxpixel_x = np.interp(maxpixel_xpix, [0, npix_x], [extent[0], extent[1]])
     maxpixel_y = np.interp(maxpixel_ypix, [0, npix_y], [extent[2], extent[3]])
     [maxpixel_p, maxpixel_q, _] = pqr_to_xyz.T @ np.array([maxpixel_x, maxpixel_y, height])
@@ -717,8 +717,10 @@ def make_xst_plots(xst_filename: str,
             "station": station_name,
             "pixels_per_metre": pixels_per_metre}
     tags.update(calibration_info)
-    lofargeotiff.write_geotiff(img, os.path.join("results", f"{fname}_nearfield_calibrated.tiff"),
+    lofargeotiff.write_geotiff(ground_img, os.path.join("results", f"{fname}_nearfield_calibrated.tiff"),
                                (pmin, qmin), (pmax, qmax), stationname=station_name,
                                obsdate=obstime, tags=tags)
 
-    return make_leaflet_map(folium_overlay, lon_center, lat_center, lon_min, lat_min, lon_max, lat_max)
+    leaflet_map = make_leaflet_map(folium_overlay, lon_center, lat_center, lon_min, lat_min, lon_max, lat_max)
+
+    return sky_fig, ground_fig, leaflet_map
