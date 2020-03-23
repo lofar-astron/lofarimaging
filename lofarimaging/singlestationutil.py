@@ -523,8 +523,11 @@ def get_full_station_name(station_name: str, rcu_mode: Union[str, int]) -> str:
     return station_name
 
 
-def make_xst_plots(xst_filename: str,
+def make_xst_plots(xst_data: np.ndarray,
                    station_name: str,
+                   obstime: datetime.datetime,
+                   subband: int,
+                   rcu_mode: int,
                    caltable_dir: str = "CalTables",
                    extent: List[float] = None,
                    pixels_per_metre: float = 0.5,
@@ -540,8 +543,11 @@ def make_xst_plots(xst_filename: str,
     Create sky and ground plots for an XST file
 
     Args:
-        xst_filename: Full path to XST file
+        xst_data: Correlation data as numpy array, shape n_ant x n_ant
         station_name: Full station name, e.g. "DE603LBA"
+        obstime: Observation time as a datetime object
+        subband: Subband number
+        rcu_mode: RCU mode
         caltable_dir: Caltable directory. Defaults to "CalTables".
         extent: Extent (in m) for ground image. Defaults to [-150, 150, -150, 150]
         pixels_per_metre: Pixels per metre. Defaults to 0.5.
@@ -552,7 +558,7 @@ def make_xst_plots(xst_filename: str,
 
 
     Returns:
-        Leaflet map (that renders as an interactive map in a notebook)
+        Sky_figure, ground_figure, Leaflet map
 
     Example:
         >>> sky_fig, ground_fig, leafletmap = make_xst_plots("test/20170720_095816_mode_3_xst_sb297.dat", \
@@ -562,45 +568,29 @@ def make_xst_plots(xst_filename: str,
         >>> type(leafletmap)
         <class 'folium.folium.Map'>
     """
-    cubename = os.path.basename(xst_filename)
-
     if extent is None:
         extent = [-150, 150, -150, 150]
 
-    station_type = get_station_type(station_name)
+    assert(xst_data.ndim == 2)
 
     os.makedirs('results', exist_ok=True)
 
-    # Distill metadata from filename
-    obsdatestr, obstimestr, _, rcu_mode, _, subbandname = cubename.rstrip(".dat").split("_")
-    subband = int(subbandname[2:])
-
-    # Get the data
-    fname = f"{obsdatestr}_{obstimestr}_{station_name}_SB{subband}"
+    fname = f"{obstime:%Y%m%d}_{obstime:%H%M%S}_{station_name}_SB{subband}"
 
     npix_l, npix_m = 131, 131
     freq = freq_from_sb(subband, rcu_mode=rcu_mode)
 
-    # Which slice in time to visualise
-    timestep = 0
-
     # For ground imaging
     ground_resolution = pixels_per_metre  # pixels per metre for ground_imaging, default is 0.5 pixel/metre
 
-    obstime = datetime.datetime.strptime(obsdatestr + ":" + obstimestr, '%Y%m%d:%H%M%S')
-
-    cube = read_acm_cube(xst_filename, station_type)
-
-    cube, calibration_info = apply_calibration(cube, station_name, rcu_mode, subband, caltable_dir=caltable_dir)
+    visibilities, calibration_info = apply_calibration(xst_data, station_name, rcu_mode, subband, caltable_dir=caltable_dir)
 
     # Split into the XX and YY polarisations (RCUs)
     # This needs to be modified in future for LBA sparse
-    cube_xx = cube[:, 0::2, 0::2]
-    cube_yy = cube[:, 1::2, 1::2]
-    visibilities_all = cube_xx + cube_yy
-
-    # Stokes I for specified timestep
-    visibilities = visibilities_all[timestep]
+    visibilities_xx = visibilities[0::2, 0::2]
+    visibilities_yy = visibilities[1::2, 1::2]
+    # Stokes I
+    visibilities_stokesI = visibilities_xx + visibilities_yy
 
     # Setup the database
     db = LofarAntennaDatabase()
@@ -622,7 +612,7 @@ def make_xst_plots(xst_filename: str,
 
     # Fourier transform
     # visibilities = cube_xx[2,:,:]
-    sky_img = sky_imager(visibilities, baselines, freq, npix_l, npix_m)
+    sky_img = sky_imager(visibilities_stokesI, baselines, freq, npix_l, npix_m)
 
     obstime_astropy = Time(obstime)
     # Determine positions of Cas A and Cyg A
@@ -667,9 +657,9 @@ def make_xst_plots(xst_filename: str,
     os.environ["NUMEXPR_NUM_THREADS"] = "3"
 
     # Select a subset of visibilities, only the lower triangular part
-    baseline_indices = np.tril_indices(visibilities.shape[0])
+    baseline_indices = np.tril_indices(visibilities_stokesI.shape[0])
 
-    visibilities_selection = visibilities[baseline_indices]
+    visibilities_selection = visibilities_stokesI[baseline_indices]
 
     ground_img = nearfield_imager(visibilities_selection.flatten()[:, np.newaxis],
                                   np.array(baseline_indices).T,
@@ -693,7 +683,7 @@ def make_xst_plots(xst_filename: str,
                                            opacity=opacity, vmin=ground_vmin, vmax=ground_vmax)
 
     ground_fig.savefig(os.path.join("results", f"{fname}_nearfield_calibrated.png"), bbox_inches='tight', dpi=200)
-    plt.close(sky_fig)
+    plt.close(ground_fig)
 
     maxpixel_ypix, maxpixel_xpix = np.unravel_index(np.argmax(ground_img), ground_img.shape)
     maxpixel_x = np.interp(maxpixel_xpix, [0, npix_x], [extent[0], extent[1]])
@@ -706,10 +696,7 @@ def make_xst_plots(xst_filename: str,
         print(f"Maximum at {maxpixel_x:.0f}m east, {maxpixel_y:.0f}m north of station center " +
               f"(lat/long {maxpixel_lat:.5f}, {maxpixel_lon:.5f})")
 
-    obstime = datetime.datetime.strptime(obsdatestr + ":" + obstimestr, '%Y%m%d:%H%M%S')
-
-    tags = {"datafile": xst_filename,
-            "generated_with": f"lofarimaging v{__version__}",
+    tags = {"generated_with": f"lofarimaging v{__version__}",
             "subband": subband,
             "frequency": freq,
             "extent_xyz": extent,
