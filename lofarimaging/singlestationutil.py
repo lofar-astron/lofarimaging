@@ -561,8 +561,10 @@ def make_xst_plots(xst_data: np.ndarray,
         Sky_figure, ground_figure, Leaflet map
 
     Example:
-        >>> sky_fig, ground_fig, leafletmap = make_xst_plots("test/20170720_095816_mode_3_xst_sb297.dat", \
-                                                             "DE603LBA", caltable_dir="test/CalTables")
+        >>> xst_data = read_acm_cube("test/20170720_095816_mode_3_xst_sb297.dat", "intl")[0]
+        >>> obstime = datetime.datetime(2017, 7, 20, 9, 58, 16)
+        >>> sky_fig, ground_fig, leafletmap = make_xst_plots(xst_data, "DE603", obstime, 297, \
+                                                             3, caltable_dir="test/CalTables")
         Maximum at -6m east, 70m north of station center (lat/long 50.97998, 11.71118)
 
         >>> type(leafletmap)
