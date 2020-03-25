@@ -11,3 +11,4 @@ owslib
 packaging
 Pillow
 opcua
+h5py
