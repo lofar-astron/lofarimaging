@@ -5,6 +5,8 @@ import os
 import datetime
 import lofargeotiff
 
+import h5py
+
 from lofarantpos.db import LofarAntennaDatabase
 
 import matplotlib.pyplot as plt
@@ -32,7 +34,7 @@ from .lofarimaging import nearfield_imager, sky_imager, skycoord_to_lmn
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_station_pqr", "get_station_type",
            "make_sky_plot", "make_ground_plot", "make_xst_plots", "apply_calibration",
-           "get_full_station_name"]
+           "get_full_station_name", "write_hdf5"]
 
 __version__ = "1.5.0"
 
@@ -573,7 +575,7 @@ def make_xst_plots(xst_data: np.ndarray,
     if extent is None:
         extent = [-150, 150, -150, 150]
 
-    assert(xst_data.ndim == 2)
+    assert xst_data.ndim == 2
 
     os.makedirs('results', exist_ok=True)
 
@@ -677,6 +679,8 @@ def make_xst_plots(xst_data: np.ndarray,
     lon_min, lat_min, _ = lofargeotiff.pqr_to_longlatheight([pmin, qmin, 0], station_name)
     lon_max, lat_max, _ = lofargeotiff.pqr_to_longlatheight([pmax, qmax, 0], station_name)
 
+    extent_lonlat = (lon_min, lon_max, lat_min, lat_max)
+
     background_map = get_map(lon_min, lon_max, lat_min, lat_max, zoom=map_zoom)
 
     ground_fig, folium_overlay = make_ground_plot(ground_img, background_map, extent,
@@ -712,4 +716,61 @@ def make_xst_plots(xst_data: np.ndarray,
 
     leaflet_map = make_leaflet_map(folium_overlay, lon_center, lat_center, lon_min, lat_min, lon_max, lat_max)
 
+    write_hdf5("results/results.h5", xst_data, visibilities, sky_img, ground_img, station_name, subband, rcu_mode,
+               freq, obstime, extent, extent_lonlat, height)
+
     return sky_fig, ground_fig, leaflet_map
+
+
+def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sky_img: np.ndarray,
+               ground_img: np.ndarray, station_name: str, subband: int, rcu_mode: int, frequency: float,
+               obstime: datetime.datetime, extent: List[float], extent_lonlat: List[float],
+               height: float):
+    """
+    Write an HDF5 file with all data
+
+    Args:
+        filename (str): Output filename. Will be appended to if a file already exists.
+        xst_data (np.ndarray): Raw uncalibrated data (shape [n_ant, n_ant])
+        visibilities (np.ndarray): Calibrated data (shape [n_ant, n_ant])
+        sky_img (np.ndarray): Sky image as array
+        ground_img (np.ndarray): Ground image as array
+        station_name (str): Station name
+        subband (int): Subband number
+        rcu_mode (int): RCU mode
+        frequency (float): Frequency
+        obstime (datetime.datetime): Time of observation
+        extent (List[float]): Extent of ground image in XY coordinates around station center
+        extent_lonlat (List[float]): Extent of ground image in long lat coordinates
+        height (float): Height of ground image (in metres)
+
+    Returns:
+        None
+
+    Example:
+        >>> xst_data = visibilities = np.ones((96, 96), dtype=np.complex)
+        >>> ground_img = sky_img = np.ones((131, 131), dtype=np.float)
+        >>> write_hdf5("test.h5", xst_data, visibilities, sky_img, ground_img, "DE603", \
+                       297, 3, 150e6, datetime.datetime.now(), [-150, 150, -150, 150], \
+                       [11.709, 11.713, 50.978, 50.981], 1.5)
+    """
+    short_station_name = station_name[:5]
+
+    with h5py.File(filename, 'a') as h5file:
+        n_observations = len(h5file)
+
+        obs_group = h5file.create_group(f"obs{n_observations+1:06d}")
+        obs_group.attrs["obstime"] = str(obstime)[:19]
+        obs_group.attrs["rcu_mode"] = rcu_mode
+        obs_group.attrs["frequency"] = frequency
+        obs_group.attrs["subband"] = subband
+        obs_group.attrs["station_name"] = short_station_name
+
+        obs_group.create_dataset("xst_data", data=xst_data)
+        obs_group.create_dataset("calibrated_data", data=visibilities)
+        obs_group.create_dataset("sky_img", data=sky_img)
+
+        dataset_ground_img = obs_group.create_dataset("ground_img", data=ground_img)
+        dataset_ground_img.attrs["extent"] = extent
+        dataset_ground_img.attrs["extent_lonlat"] = extent_lonlat
+        dataset_ground_img.attrs["height"] = height
