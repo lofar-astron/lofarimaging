@@ -1,11 +1,11 @@
 """Functions for working with LOFAR single station data"""
 
-import numpy as np
 import os
 import datetime
+import h5py
 import lofargeotiff
 
-import h5py
+import numpy as np
 
 from lofarantpos.db import LofarAntennaDatabase
 
@@ -22,7 +22,7 @@ from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, get_sun
 import astropy.units as u
 from astropy.time import Time
 
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Dict, Tuple, Union
 
 import lofarantpos
 from packaging import version
@@ -540,7 +540,8 @@ def make_xst_plots(xst_data: np.ndarray,
                    height: float = 1.5,
                    map_zoom: int = 19,
                    sky_only: bool = False,
-                   opacity: float = 0.6):
+                   opacity: float = 0.6,
+                   hdf5_filename: str = 'results/results.h5'):
     """
     Create sky and ground plots for an XST file
 
@@ -557,6 +558,7 @@ def make_xst_plots(xst_data: np.ndarray,
         map_zoom: Zoom level for map tiles. Defaults to 19.
         sky_only: Make sky image only. Defaults to False.
         opacity: Opacity for map overlay. Defaults to 0.6.
+        hdf5_filename: Filename where hdf5 results can be written. Defaults to 'results/results.h5'
 
 
     Returns:
@@ -684,9 +686,9 @@ def make_xst_plots(xst_data: np.ndarray,
     background_map = get_map(lon_min, lon_max, lat_min, lat_max, zoom=map_zoom)
 
     ground_fig, folium_overlay = make_ground_plot(ground_img, background_map, extent,
-                                           title=f"Near field image for {station_name}",
-                                           subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
-                                           opacity=opacity, vmin=ground_vmin, vmax=ground_vmax)
+                                                  title=f"Near field image for {station_name}",
+                                                  subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
+                                                  opacity=opacity, vmin=ground_vmin, vmax=ground_vmax)
 
     ground_fig.savefig(os.path.join("results", f"{fname}_nearfield_calibrated.png"), bbox_inches='tight', dpi=200)
     plt.close(ground_fig)
@@ -716,7 +718,7 @@ def make_xst_plots(xst_data: np.ndarray,
 
     leaflet_map = make_leaflet_map(folium_overlay, lon_center, lat_center, lon_min, lat_min, lon_max, lat_max)
 
-    write_hdf5("results/results.h5", xst_data, visibilities, sky_img, ground_img, station_name, subband, rcu_mode,
+    write_hdf5(hdf5_filename, xst_data, visibilities, sky_img, ground_img, station_name, subband, rcu_mode,
                freq, obstime, extent, extent_lonlat, height)
 
     return sky_fig, ground_fig, leaflet_map
@@ -770,7 +772,8 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
         obs_group.create_dataset("calibrated_data", data=visibilities)
         obs_group.create_dataset("sky_img", data=sky_img)
 
-        dataset_ground_img = obs_group.create_dataset("ground_img", data=ground_img)
+        ground_img_group = obs_group.create_group("ground_images")
+        dataset_ground_img = ground_img_group.create_dataset("ground_img000", data=ground_img)
         dataset_ground_img.attrs["extent"] = extent
         dataset_ground_img.attrs["extent_lonlat"] = extent_lonlat
         dataset_ground_img.attrs["height"] = height
