@@ -568,7 +568,8 @@ def make_xst_plots(xst_data: np.ndarray,
         >>> xst_data = read_acm_cube("test/20170720_095816_mode_3_xst_sb297.dat", "intl")[0]
         >>> obstime = datetime.datetime(2017, 7, 20, 9, 58, 16)
         >>> sky_fig, ground_fig, leafletmap = make_xst_plots(xst_data, "DE603", obstime, 297, \
-                                                             3, caltable_dir="test/CalTables")
+                                                             3, caltable_dir="test/CalTables", \
+                                                             hdf5_filename="test/test.h5")
         Maximum at -6m east, 70m north of station center (lat/long 50.97998, 11.71118)
 
         >>> type(leafletmap)
@@ -775,7 +776,7 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
     Example:
         >>> xst_data = visibilities = np.ones((96, 96), dtype=np.complex)
         >>> ground_img = sky_img = np.ones((131, 131), dtype=np.float)
-        >>> write_hdf5("test.h5", xst_data, visibilities, sky_img, ground_img, "DE603", \
+        >>> write_hdf5("test/test.h5", xst_data, visibilities, sky_img, ground_img, "DE603", \
                        297, 3, 150e6, datetime.datetime.now(), [-150, 150, -150, 150], \
                        [11.709, 11.713, 50.978, 50.981], 1.5)
     """
@@ -801,3 +802,39 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
         dataset_ground_img.attrs["extent"] = extent
         dataset_ground_img.attrs["extent_lonlat"] = extent_lonlat
         dataset_ground_img.attrs["height"] = height
+
+
+def merge_hdf5(src_filename: str, dest_filename: str):
+    """
+    Merge HDF5 files containing groups with observations called obs000001 etc.
+    Observations from src_filename will be appended to dest_filename, the obs
+    numbers will be changed.
+
+    Args:
+        src_filename: Source filename
+        dest_filename: Destination filename
+
+    Returns:
+        None
+
+    Example:
+        >>> import h5py
+        >>> with h5py.File("test/test_src.h5", 'w') as src_file:
+        ...     src_file.create_group("obs00001")
+        ...     src_file.create_group("obs00002")
+        <HDF5 group "/obs00001" (0 members)>
+        <HDF5 group "/obs00002" (0 members)>
+        >>> with h5py.File("test/test_dest.h5", 'w') as dest_file:
+        ...     dest_file.create_group("obs000005")
+        <HDF5 group "/obs000005" (0 members)>
+        >>> merge_hdf5("test/test_src.h5", "test/test_dest.h5")
+        >>> list(h5py.File("test/test_dest.h5"))
+        ['obs000005', 'obs000006', 'obs000007']
+    """
+    with h5py.File(dest_filename) as dest_file:
+        with h5py.File(src_filename, 'r') as src_file:
+            for src_obsname in src_file:
+                dest_obsname = get_new_obsname(dest_file)
+                obs = h5py.h5o.copy(src_file.id, bytes(src_obsname, 'utf-8'),
+                                    dest_file.id, bytes(dest_obsname, 'utf-8'))
+                dest_file.flush()
