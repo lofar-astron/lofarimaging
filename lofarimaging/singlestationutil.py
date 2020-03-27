@@ -34,7 +34,7 @@ from .lofarimaging import nearfield_imager, sky_imager, skycoord_to_lmn
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_station_pqr", "get_station_type",
            "make_sky_plot", "make_ground_plot", "make_xst_plots", "apply_calibration",
-           "get_full_station_name", "write_hdf5"]
+           "get_full_station_name", "write_hdf5", "get_new_obsname"]
 
 __version__ = "1.5.0"
 
@@ -724,6 +724,29 @@ def make_xst_plots(xst_data: np.ndarray,
     return sky_fig, ground_fig, leaflet_map
 
 
+def get_new_obsname(h5file: h5py.File):
+    """
+    Get the next available observation name for a HDF5 file
+
+    Args:
+        h5file: HDF5 file with groups called' obs000001 etc
+
+    Returns:
+        str: "obs000002" etc
+
+    Example:
+        >>> emptyfile = h5py.File("test/empty.h5")
+        >>> get_new_obsname(emptyfile)
+        'obs000001'
+    """
+    all_obsnums = [int(obsname[3:]) for obsname in h5file]
+    if len(all_obsnums) == 0:
+        new_obsnum = 1
+    else:
+        new_obsnum = max(all_obsnums) + 1
+    return f"obs{new_obsnum:06d}"
+
+
 def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sky_img: np.ndarray,
                ground_img: np.ndarray, station_name: str, subband: int, rcu_mode: int, frequency: float,
                obstime: datetime.datetime, extent: List[float], extent_lonlat: List[float],
@@ -761,7 +784,8 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
     with h5py.File(filename, 'a') as h5file:
         n_observations = len(h5file)
 
-        obs_group = h5file.create_group(f"obs{n_observations+1:06d}")
+        new_obsname = get_new_obsname(h5file)
+        obs_group = h5file.create_group(new_obsname)
         obs_group.attrs["obstime"] = str(obstime)[:19]
         obs_group.attrs["rcu_mode"] = rcu_mode
         obs_group.attrs["frequency"] = frequency
