@@ -2,29 +2,27 @@
 
 import os
 import datetime
-import lofargeotiff
+from typing import List, Dict, Tuple, Union
 
 import numpy as np
-
-from lofarantpos.db import LofarAntennaDatabase
+from packaging import version
 
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib import cm
 from matplotlib.figure import Figure
 from matplotlib.colors import ListedColormap, Normalize
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.patches import Circle
 import matplotlib.axes as maxes
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, get_sun
 import astropy.units as u
 from astropy.time import Time
 
-from typing import List, Dict, Tuple, Union
-
+import lofargeotiff
+from lofarantpos.db import LofarAntennaDatabase
 import lofarantpos
-from packaging import version
 
 from .maputil import get_map, make_leaflet_map
 from .lofarimaging import nearfield_imager, sky_imager, skycoord_to_lmn
@@ -34,7 +32,7 @@ from .hdf5util import write_hdf5
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_station_pqr", "get_station_type",
            "make_sky_plot", "make_ground_plot", "make_xst_plots", "apply_calibration",
-           "get_full_station_name", "write_hdf5"]
+           "get_full_station_name"]
 
 __version__ = "1.5.0"
 
@@ -48,7 +46,7 @@ GENERIC_CORE_201512 = [0, 10, 4, 3, 14, 0, 5, 5, 3, 13, 10, 3, 12, 2, 7, 15, 6, 
 GENERIC_REMOTE_201512 = [0, 13, 12, 4, 11, 11, 7, 8, 2, 7, 11, 2, 10, 2, 6, 3, 8, 3, 1, 7, 1, 15, 13, 1, 11, 1, 12, 7,
                          10, 15, 8, 2, 12, 13, 9, 13, 4, 5, 5, 12, 5, 5, 9, 11, 15, 12, 2, 15]
 
-assert (version.parse(lofarantpos.__version__) >= version.parse("0.4.0"))
+assert version.parse(lofarantpos.__version__) >= version.parse("0.4.0")
 
 
 def sb_from_freq(freq: float, rcu_mode: Union[int, str] = 1) -> int:
@@ -590,7 +588,8 @@ def make_xst_plots(xst_data: np.ndarray,
     # For ground imaging
     ground_resolution = pixels_per_metre  # pixels per metre for ground_imaging, default is 0.5 pixel/metre
 
-    visibilities, calibration_info = apply_calibration(xst_data, station_name, rcu_mode, subband, caltable_dir=caltable_dir)
+    visibilities, calibration_info = apply_calibration(xst_data, station_name, rcu_mode, subband,
+                                                       caltable_dir=caltable_dir)
 
     # Split into the XX and YY polarisations (RCUs)
     # This needs to be modified in future for LBA sparse

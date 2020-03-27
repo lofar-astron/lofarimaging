@@ -28,9 +28,9 @@ Per observation, the following attributes are used:
 """
 
 import datetime
+from typing import List
 import numpy as np
 import h5py
-from typing import List
 
 __all__ = ["get_new_obsname", "write_hdf5", "merge_hdf5"]
 
@@ -93,8 +93,6 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
     short_station_name = station_name[:5]
 
     with h5py.File(filename, 'a') as h5file:
-        n_observations = len(h5file)
-
         new_obsname = get_new_obsname(h5file)
         obs_group = h5file.create_group(new_obsname)
         obs_group.attrs["obstime"] = str(obstime)[:19]
