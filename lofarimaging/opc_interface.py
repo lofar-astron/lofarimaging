@@ -4,7 +4,6 @@ from opcua import ua, uamethod, Server, Client
 import numpy as np
 
 DEFAULT_URI = "http://lofar.eu"
-NUM_RCU = 96
 
 
 def download_xst(subband: int, integration_time_s: int, url: str = 'localhost', port: int = 50000):
