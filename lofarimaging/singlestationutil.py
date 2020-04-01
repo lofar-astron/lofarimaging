@@ -539,7 +539,8 @@ def make_xst_plots(xst_data: np.ndarray,
                    map_zoom: int = 19,
                    sky_only: bool = False,
                    opacity: float = 0.6,
-                   hdf5_filename: str = 'results/results.h5'):
+                   hdf5_filename: str = None,
+                   outputpath: str = "results"):
     """
     Create sky and ground plots for an XST file
 
@@ -556,7 +557,8 @@ def make_xst_plots(xst_data: np.ndarray,
         map_zoom: Zoom level for map tiles. Defaults to 19.
         sky_only: Make sky image only. Defaults to False.
         opacity: Opacity for map overlay. Defaults to 0.6.
-        hdf5_filename: Filename where hdf5 results can be written. Defaults to 'results/results.h5'
+        hdf5_filename: Filename where hdf5 results can be written. Defaults to outputpath + '/results.h5'
+        outputpath: Directory where results can be saved. Defaults to 'results'
 
 
     Returns:
@@ -576,9 +578,12 @@ def make_xst_plots(xst_data: np.ndarray,
     if extent is None:
         extent = [-150, 150, -150, 150]
 
+    if hdf5_filename is None:
+        hdf5_filename = os.path.join(outputpath, "results.h5")
+
     assert xst_data.ndim == 2
 
-    os.makedirs('results', exist_ok=True)
+    os.makedirs(outputpath, exist_ok=True)
 
     fname = f"{obstime:%Y%m%d}_{obstime:%H%M%S}_{station_name}_SB{subband}"
 
@@ -652,7 +657,7 @@ def make_xst_plots(xst_data: np.ndarray,
                   subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}", fig=sky_fig,
                   vmin=sky_vmin, vmax=sky_vmax)
 
-    sky_fig.savefig(os.path.join('results', f'{fname}_sky_calibrated.png'), bbox_inches='tight', dpi=200)
+    sky_fig.savefig(os.path.join(outputpath, f'{fname}_sky_calibrated.png'), bbox_inches='tight', dpi=200)
     plt.close(sky_fig)
 
     if sky_only:
@@ -690,7 +695,7 @@ def make_xst_plots(xst_data: np.ndarray,
                                                   subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
                                                   opacity=opacity, vmin=ground_vmin, vmax=ground_vmax)
 
-    ground_fig.savefig(os.path.join("results", f"{fname}_nearfield_calibrated.png"), bbox_inches='tight', dpi=200)
+    ground_fig.savefig(os.path.join(outputpath, f"{fname}_nearfield_calibrated.png"), bbox_inches='tight', dpi=200)
     plt.close(ground_fig)
 
     maxpixel_ypix, maxpixel_xpix = np.unravel_index(np.argmax(ground_img), ground_img.shape)
@@ -712,7 +717,7 @@ def make_xst_plots(xst_data: np.ndarray,
             "station": station_name,
             "pixels_per_metre": pixels_per_metre}
     tags.update(calibration_info)
-    lofargeotiff.write_geotiff(ground_img, os.path.join("results", f"{fname}_nearfield_calibrated.tiff"),
+    lofargeotiff.write_geotiff(ground_img, os.path.join(outputpath, f"{fname}_nearfield_calibrated.tiff"),
                                (pmin, qmin), (pmax, qmax), stationname=station_name,
                                obsdate=obstime, tags=tags)
 
