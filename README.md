@@ -3,7 +3,7 @@ This repository contains code for imaging LOFAR data with direct Fourier transfo
 
 For imaging larger LOFAR data sets (in Measurement Sets), see the LOFAR imaging cookbook.
 
-Much of the code in this repository was originally written by Vanessa Moss, based on the tutorial by Michiel Brentjens (github.com/brentjens).
+Much of the code in this repository was originally written by Vanessa Moss (https://github.com/cosmicpudding), based on a LOFAR imaging tutorial by Michiel Brentjens (https://github.com/brentjens).
 
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/lofar-astron/lofarimaging/master?filepath=lofarimaging.ipynb)
 
