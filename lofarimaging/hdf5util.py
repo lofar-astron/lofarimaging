@@ -101,12 +101,12 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
         obs_group.attrs["subband"] = subband
         obs_group.attrs["station_name"] = short_station_name
 
-        obs_group.create_dataset("xst_data", data=xst_data)
-        obs_group.create_dataset("calibrated_data", data=visibilities)
-        obs_group.create_dataset("sky_img", data=sky_img)
+        obs_group.create_dataset("xst_data", data=xst_data, compression="gzip")
+        obs_group.create_dataset("calibrated_data", data=visibilities, compression="gzip")
+        obs_group.create_dataset("sky_img", data=sky_img, compression="gzip")
 
         ground_img_group = obs_group.create_group("ground_images")
-        dataset_ground_img = ground_img_group.create_dataset("ground_img000", data=ground_img)
+        dataset_ground_img = ground_img_group.create_dataset("ground_img000", data=ground_img, compression="gzip")
         dataset_ground_img.attrs["extent"] = extent
         dataset_ground_img.attrs["extent_lonlat"] = extent_lonlat
         dataset_ground_img.attrs["height"] = height
