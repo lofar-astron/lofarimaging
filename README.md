@@ -8,7 +8,13 @@ Much of the code in this repository was originally written by Vanessa Moss, base
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/lofar-astron/lofarimaging/master?filepath=lofarimaging.ipynb)
 
 ### Installation
-Download or clone this repository. To install requirements, run
+Download or clone this repository. To install, run
+
+```
+>>> python setup.py develop
+```
+
+Alternatively, install just the external requirements with
 
 ```
 >>> pip install -r requirements.txt
