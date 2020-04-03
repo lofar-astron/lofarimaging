@@ -347,7 +347,7 @@ def get_station_pqr(station_name: str, rcu_mode: Union[str, int], db):
 
 
 def make_ground_plot(image: np.ndarray, background_map: np.ndarray, extent: List[float], title: str = "Ground plot",
-                     subtitle: str = "", opacity: float = 0.6, fig: Figure = None, **kwargs) \
+        subtitle: str = "", opacity: float = 0.6, fig: Figure = None, draw_contours: bool = True, **kwargs) \
         -> Tuple[Figure, np.ndarray]:
     """
     Make a ground plot of an array with data
@@ -359,6 +359,7 @@ def make_ground_plot(image: np.ndarray, background_map: np.ndarray, extent: List
         subtitle: Subtitle for the plot
         opacity: maximum opacity of the plot
         fig: exisiting figure object to be reused
+        draw_contours: draw contours. Defaults to True
         **kwargs: other options to be passed to plt.imshow (e.g. vmin)
 
     Returns:
@@ -371,7 +372,7 @@ def make_ground_plot(image: np.ndarray, background_map: np.ndarray, extent: List
         (150, 150, 4)
     """
     if fig is None:
-        fig = plt.figure(figsize=(10, 10), constrained_layout=True)
+        fig = plt.figure(figsize=(10, 10))
 
     # Make colors semi-transparent in the lower 3/4 of the scale
     cmap = cm.Spectral_r
@@ -410,8 +411,9 @@ def make_ground_plot(image: np.ndarray, background_map: np.ndarray, extent: List
     ax.text(0.5, 0.05, 'S', color='w', fontsize=18, transform=ax.transAxes, ha='center', va='center')
 
     ground_vmin_img, ground_vmax_img = cimg.get_clim()
-    ax.contour(image, np.linspace(ground_vmin_img, ground_vmax_img, 15), origin='lower', cmap=cm.Greys,
-               extent=extent, linewidths=0.5, alpha=opacity)
+    if draw_contours:
+        ax.contour(image, np.linspace(ground_vmin_img, ground_vmax_img, 15), origin='lower', cmap=cm.Greys,
+                   extent=extent, linewidths=0.5, alpha=opacity)
     ax.grid(True, alpha=0.3)
 
     vmin, vmax = cimg.get_clim()
