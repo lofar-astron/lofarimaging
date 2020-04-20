@@ -112,7 +112,7 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
         dataset_ground_img.attrs["height"] = height
 
 
-def merge_hdf5(src_filename: str, dest_filename: str):
+def merge_hdf5(src_filename: str, dest_filename: str, obslist: List[str]):
     """
     Merge HDF5 files containing groups with observations called obs000001 etc.
     Observations from src_filename will be appended to dest_filename, the obs
@@ -121,6 +121,8 @@ def merge_hdf5(src_filename: str, dest_filename: str):
     Args:
         src_filename: Source filename
         dest_filename: Destination filename
+        obslist: List of observation names, must all be in source file.
+                 Defaults to all observations.
 
     Returns:
         None
@@ -141,7 +143,9 @@ def merge_hdf5(src_filename: str, dest_filename: str):
     """
     with h5py.File(dest_filename) as dest_file:
         with h5py.File(src_filename, 'r') as src_file:
-            for src_obsname in src_file:
+            if obslist == None:
+                obslist = src_file
+            for src_obsname in obslist:
                 dest_obsname = get_new_obsname(dest_file)
                 h5py.h5o.copy(src_file.id, bytes(src_obsname, 'utf-8'),
                               dest_file.id, bytes(dest_obsname, 'utf-8'))
