@@ -112,7 +112,7 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
         dataset_ground_img.attrs["height"] = height
 
 
-def merge_hdf5(src_filename: str, dest_filename: str, obslist: List[str]):
+def merge_hdf5(src_filename: str, dest_filename: str, obslist: List[str] = None):
     """
     Merge HDF5 files containing groups with observations called obs000001 etc.
     Observations from src_filename will be appended to dest_filename, the obs
