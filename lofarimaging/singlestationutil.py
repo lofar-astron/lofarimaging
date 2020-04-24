@@ -32,7 +32,7 @@ from .hdf5util import write_hdf5
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_station_pqr", "get_station_type",
            "make_sky_plot", "make_ground_plot", "make_xst_plots", "apply_calibration",
-           "get_full_station_name"]
+           "get_full_station_name", "get_extent_lonlat"]
 
 __version__ = "1.5.0"
 
@@ -525,6 +525,35 @@ def get_full_station_name(station_name: str, rcu_mode: Union[str, int]) -> str:
     return station_name
 
 
+def get_extent_lonlat(extent_m: List[int],
+                      full_station_name: str,
+                      db: lofarantpos.db.LofarAntennaDatabase) -> Tuple[float]:
+    """
+    Get extent in longintude, latitude
+
+    Args:
+        extent_m (List[int]): Extent in metres, in the station frame
+        full_station_name (str): Station name (full, so with LBA or HBA)
+        db (lofarantpos.db.LofarAntennaDatabase): Antenna database instance
+
+    Returns:
+        Tuple[float]: (lon_min, lon_max, lat_min, lat_max)
+    """
+    rotation = db.rotation_from_north(full_station_name)
+
+    pqr_to_xyz = np.array([[np.cos(-rotation), -np.sin(-rotation), 0],
+                           [np.sin(-rotation), np.cos(-rotation), 0],
+                           [0, 0, 1]])
+
+    pmin, qmin, _ = pqr_to_xyz.T @ (np.array([extent_m[0], extent_m[2], 0]))
+    pmax, qmax, _ = pqr_to_xyz.T @ (np.array([extent_m[1], extent_m[3], 0]))
+    lon_center, lat_center, _ = lofargeotiff.pqr_to_longlatheight([0, 0, 0], full_station_name)
+    lon_min, lat_min, _ = lofargeotiff.pqr_to_longlatheight([pmin, qmin, 0], full_station_name)
+    lon_max, lat_max, _ = lofargeotiff.pqr_to_longlatheight([pmax, qmax, 0], full_station_name)
+
+    return [lon_min, lon_max, lat_min, lat_max]
+
+
 def make_xst_plots(xst_data: np.ndarray,
                    station_name: str,
                    obstime: datetime.datetime,
@@ -682,15 +711,11 @@ def make_xst_plots(xst_data: np.ndarray,
     ground_img = np.real(2 * ground_img)
 
     # Convert bottom left and upper right to PQR just for lofargeo
-    pmin, qmin, _ = pqr_to_xyz.T @ (np.array([extent[0], extent[2], 0]))
-    pmax, qmax, _ = pqr_to_xyz.T @ (np.array([extent[1], extent[3], 0]))
     lon_center, lat_center, _ = lofargeotiff.pqr_to_longlatheight([0, 0, 0], station_name)
-    lon_min, lat_min, _ = lofargeotiff.pqr_to_longlatheight([pmin, qmin, 0], station_name)
-    lon_max, lat_max, _ = lofargeotiff.pqr_to_longlatheight([pmax, qmax, 0], station_name)
 
-    extent_lonlat = (lon_min, lon_max, lat_min, lat_max)
+    extent_lonlat = get_extent_lonlat(extent, station_name, db)
 
-    background_map = get_map(lon_min, lon_max, lat_min, lat_max, zoom=map_zoom)
+    background_map = get_map(*extent_lonlat, zoom=map_zoom)
 
     ground_fig, folium_overlay = make_ground_plot(ground_img, background_map, extent,
                                                   title=f"Near field image for {station_name}",
@@ -719,9 +744,10 @@ def make_xst_plots(xst_data: np.ndarray,
             "station": station_name,
             "pixels_per_metre": pixels_per_metre}
     tags.update(calibration_info)
+    lon_min, lon_max, lat_min, lat_max = extent_lonlat
     lofargeotiff.write_geotiff(ground_img, os.path.join(outputpath, f"{fname}_nearfield_calibrated.tiff"),
-                               (pmin, qmin), (pmax, qmax), stationname=station_name,
-                               obsdate=obstime, tags=tags)
+                               (lon_min, lat_min), (lon_max, lat_max), as_pqr=False,
+                               stationname=station_name, obsdate=obstime, tags=tags)
 
     leaflet_map = make_leaflet_map(folium_overlay, lon_center, lat_center, lon_min, lat_min, lon_max, lat_max)
 
