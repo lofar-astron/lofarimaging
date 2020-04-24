@@ -32,7 +32,7 @@ from typing import List
 import numpy as np
 import h5py
 
-__all__ = ["get_new_obsname", "write_hdf5", "merge_hdf5"]
+__all__ = ["get_new_obsname", "write_hdf5", "merge_hdf5", "get_obsnums"]
 
 
 def get_new_obsname(h5file: h5py.File):
@@ -143,10 +143,46 @@ def merge_hdf5(src_filename: str, dest_filename: str, obslist: List[str] = None)
     """
     with h5py.File(dest_filename) as dest_file:
         with h5py.File(src_filename, 'r') as src_file:
-            if obslist == None:
+            if obslist is None:
                 obslist = src_file
             for src_obsname in obslist:
                 dest_obsname = get_new_obsname(dest_file)
                 h5py.h5o.copy(src_file.id, bytes(src_obsname, 'utf-8'),
                               dest_file.id, bytes(dest_obsname, 'utf-8'))
                 dest_file.flush()
+
+def get_obsnums(h5file: h5py.File,
+                start_date: datetime.datetime = None,
+                end_date: datetime.datetime = None,
+                rcu_modes: List[int] = None,
+                station_name: str = None,
+                subband: int = None,
+                extent: List[int] = None) -> List[str]:
+    """
+    Find observations in an HDF5 file with many observations
+    """
+    matching_obs = []
+    for obs in h5file:
+        if start_date is not None or end_date is not None:
+            obsdate = datetime.datetime.strptime(h5file[obs].attrs["obstime"], "%Y-%m-%d %H:%M:%S")
+            if start_date is not None and obsdate < start_date:
+                continue
+            if end_date is not None and obsdate > end_date:
+                continue
+        if rcu_modes is not None and h5file[obs].attrs["rcu_mode"] not in rcu_modes:
+            continue
+        if station_name is not None and h5file[obs].attrs["station_name"] != station_name:
+            continue
+        if subband is not None and h5file[obs].attrs["subband"] != subband:
+            continue
+        if extent is not None:
+            has_ground_image_with_extent = False
+            for groundimg in h5file[obs]["ground_images"]:
+                if list(h5file[obs]["ground_images"][groundimg].attrs["extent"]) == extent:
+                    has_ground_image_with_extent = True
+                    break
+            if not has_ground_image_with_extent:
+                continue
+        matching_obs.append(obs)
+
+    return matching_obs
