@@ -12,3 +12,4 @@ packaging
 Pillow
 opcua
 h5py
+tqdm

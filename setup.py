@@ -17,7 +17,7 @@ if __name__ == "__main__":
           packages=['lofarimaging'],
           url="https://github.com/lofar-astron/lofarimaging",
           requires=['numpy', 'numexpr', 'numba', 'astropy', 'lofargeotiff', 'lofarantpos',
-                    'matplotlib', 'folium', 'mercantile', 'owslib', 'packaging', 'Pillow', 'h5py'],
+                    'matplotlib', 'folium', 'mercantile', 'owslib', 'packaging', 'Pillow', 'h5py', 'tqdm'],
           scripts=[],
           classifiers=[
               "Programming Language :: Python :: 3",
