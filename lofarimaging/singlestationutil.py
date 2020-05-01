@@ -16,7 +16,7 @@ from matplotlib.patches import Circle
 import matplotlib.axes as maxes
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, get_sun
+from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, get_sun, get_moon
 import astropy.units as u
 from astropy.time import Time
 
@@ -388,7 +388,7 @@ def make_ground_plot(image: np.ndarray, background_map: np.ndarray, extent: List
 
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.2, axes_class=maxes.Axes)
-    cbar = fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.1e")
+    cbar = fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.2e")
     cbar.set_alpha(1.0)
     cbar.draw_all()
     # cbar.set_ticks([])
@@ -454,7 +454,7 @@ def make_sky_plot(image: np.ndarray, marked_bodies_lmn: Dict[str, Tuple[float, f
                      clip_path=circle1, clip_on=True, **kwargs)
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.2, axes_class=maxes.Axes)
-    fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.1e")
+    fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.2e")
 
     ax.set_xlim(1, -1)
 
@@ -664,15 +664,15 @@ def make_xst_plots(xst_data: np.ndarray,
 
     marked_bodies = {
         'Cas A': SkyCoord(ra=350.85 * u.deg, dec=58.815 * u.deg),
-        'Cyg A': SkyCoord(ra=299.868 * u.deg, dec=40.734 * u.deg),
-        #        'Per A': SkyCoord.from_name("Perseus A"),
-        #        'Her A': SkyCoord.from_name("Hercules A"),
-        #        'Cen A': SkyCoord.from_name("Centaurus A"),
-        #        '?': SkyCoord.from_name("J101415.9+105106"),
-        #        '3C295': SkyCoord.from_name("3C295"),
-        #        'Moon': get_moon(obstime_astropy, location=station_earthlocation).transform_to(GCRS),
-        'Sun': get_sun(obstime_astropy)
-        #        '3C196': SkyCoord.from_name("3C196")
+        'Cyg A': SkyCoord(ra=299.86815191 * u.deg, dec=40.73391574 * u.deg),
+        'Per A': SkyCoord(ra=49.95066567*u.deg, dec=41.51169838 * u.deg),
+        'Her A': SkyCoord(ra=252.78343333*u.deg, dec=4.99303056*u.deg),
+        'Cen A': SkyCoord(ra=201.36506288*u.deg, dec=-43.01911267*u.deg),
+        'Vir A': SkyCoord(ra=187.70593076*u.deg, dec=12.39112329*u.deg),
+        '3C295': SkyCoord(ra=212.83527917*u.deg, dec=52.20264444*u.deg),
+        'Moon': get_moon(obstime_astropy, location=station_earthlocation).transform_to(GCRS),
+        'Sun': get_sun(obstime_astropy),
+        '3C196': SkyCoord(ra=123.40023371*u.deg, dec=48.21739888*u.deg)
     }
 
     marked_bodies_lmn = {}
@@ -681,10 +681,12 @@ def make_xst_plots(xst_data: np.ndarray,
         if body_coord.transform_to(AltAz(location=station_earthlocation, obstime=obstime_astropy)).alt > 0:
             marked_bodies_lmn[body_name] = skycoord_to_lmn(marked_bodies[body_name], zenith)
 
+    marked_bodies_lmn_only3 = {k: v for (k, v) in marked_bodies_lmn.items() if k in ('Cas A', 'Cyg A', 'Sun')}
+
     # Plot the resulting sky image
     sky_fig = plt.figure(figsize=(10, 10))
 
-    make_sky_plot(sky_img, marked_bodies_lmn, title=f"Sky image for {station_name}",
+    make_sky_plot(sky_img, marked_bodies_lmn_only3, title=f"Sky image for {station_name}",
                   subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}", fig=sky_fig,
                   vmin=sky_vmin, vmax=sky_vmax)
 
@@ -752,6 +754,6 @@ def make_xst_plots(xst_data: np.ndarray,
     leaflet_map = make_leaflet_map(folium_overlay, lon_center, lat_center, lon_min, lat_min, lon_max, lat_max)
 
     write_hdf5(hdf5_filename, xst_data, visibilities, sky_img, ground_img, station_name, subband, rcu_mode,
-               freq, obstime, extent, extent_lonlat, height)
+               freq, obstime, extent, extent_lonlat, height, marked_bodies_lmn)
 
     return sky_fig, ground_fig, leaflet_map
