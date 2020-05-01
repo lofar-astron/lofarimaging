@@ -46,7 +46,7 @@ def get_new_obsname(h5file: h5py.File):
         str: "obs000002" etc
 
     Example:
-        >>> emptyfile = h5py.File("test/empty.h5")
+        >>> emptyfile = h5py.File("test/empty.h5", 'w')
         >>> get_new_obsname(emptyfile)
         'obs000001'
     """
@@ -141,10 +141,10 @@ def merge_hdf5(src_filename: str, dest_filename: str, obslist: List[str] = None)
         ...     dest_file.create_group("obs000005")
         <HDF5 group "/obs000005" (0 members)>
         >>> merge_hdf5("test/test_src.h5", "test/test_dest.h5")
-        >>> list(h5py.File("test/test_dest.h5"))
+        >>> list(h5py.File("test/test_dest.h5", 'r'))
         ['obs000005', 'obs000006', 'obs000007']
     """
-    with h5py.File(dest_filename) as dest_file:
+    with h5py.File(dest_filename, 'a') as dest_file:
         with h5py.File(src_filename, 'r') as src_file:
             if obslist is None:
                 obslist = src_file
