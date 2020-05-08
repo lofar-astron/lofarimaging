@@ -614,6 +614,10 @@ def make_xst_plots(xst_data: np.ndarray,
 
     assert xst_data.ndim == 2
 
+    if not xst_data.any():
+        # All zeros, no need to image and save
+        return None, None, None
+
     os.makedirs(outputpath, exist_ok=True)
 
     fname = f"{obstime:%Y%m%d}_{obstime:%H%M%S}_{station_name}_SB{subband}"
