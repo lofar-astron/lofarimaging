@@ -751,8 +751,8 @@ def make_xst_plots(xst_data: np.ndarray,
             "pixels_per_metre": pixels_per_metre}
     tags.update(calibration_info)
     lon_min, lon_max, lat_min, lat_max = extent_lonlat
-    lofargeotiff.write_geotiff(ground_img, os.path.join(outputpath, f"{fname}_nearfield_calibrated.tiff"),
-                               (lon_min, lat_min), (lon_max, lat_max), as_pqr=False,
+    lofargeotiff.write_geotiff(ground_img[::-1,:], os.path.join(outputpath, f"{fname}_nearfield_calibrated.tiff"),
+                               (lon_min, lat_max), (lon_max, lat_min), as_pqr=False,
                                stationname=station_name, obsdate=obstime, tags=tags)
 
     leaflet_map = make_leaflet_map(folium_overlay, lon_center, lat_center, lon_min, lat_min, lon_max, lat_max)
