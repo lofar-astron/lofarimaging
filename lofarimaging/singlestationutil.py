@@ -226,17 +226,7 @@ def apply_calibration(visibilities: np.ndarray, station_name: str, rcu_mode: Uni
         gain_matrix = rcu_gains[np.newaxis, :] * np.conj(rcu_gains[:, np.newaxis])
         visibilities = visibilities / gain_matrix
 
-    calibration_info = {}
-    if "CalTableHeader.Observation.Date" in cal_header:
-        calibration_info["calibration_obsdate"] = cal_header["CalTableHeader.Observation.Date"]
-    if "CalTableHeader.Calibration.Date" in cal_header:
-        calibration_info["calibration_date"] = cal_header["CalTableHeader.Calibration.Date"]
-    if "CalTableHeader.Comment" in cal_header:
-        calibration_info["calibration_comment"] = cal_header["CalTableHeader.Comment"]
-    if caltable_filename is not None:
-        calibration_info["calibration_filename"] = caltable_filename
-
-    return visibilities, calibration_info
+    return visibilities, cal_header
 
 
 def rcus_in_station(station_type: str):
@@ -758,6 +748,6 @@ def make_xst_plots(xst_data: np.ndarray,
     leaflet_map = make_leaflet_map(folium_overlay, lon_center, lat_center, lon_min, lat_min, lon_max, lat_max)
 
     write_hdf5(hdf5_filename, xst_data, visibilities, sky_img, ground_img, station_name, subband, rcu_mode,
-               freq, obstime, extent, extent_lonlat, height, marked_bodies_lmn)
+               freq, obstime, extent, extent_lonlat, height, marked_bodies_lmn, calibration_info)
 
     return sky_fig, ground_fig, leaflet_map

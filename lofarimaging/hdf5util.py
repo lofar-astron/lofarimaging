@@ -61,7 +61,7 @@ def get_new_obsname(h5file: h5py.File):
 def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sky_img: np.ndarray,
                ground_img: np.ndarray, station_name: str, subband: int, rcu_mode: int, frequency: float,
                obstime: datetime.datetime, extent: List[float], extent_lonlat: List[float],
-               height: float, bodies_lmn: Dict[str, Tuple[float]]):
+               height: float, bodies_lmn: Dict[str, Tuple[float]], calibration_info: Dict[str, str]):
     """
     Write an HDF5 file with all data
 
@@ -80,6 +80,7 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
         extent_lonlat (List[float]): Extent of ground image in long lat coordinates
         height (float): Height of ground image (in metres)
         bodies_lmn (Dict[str, Tuple[float]]): lmn coordinates of some objects on the sky
+        calibration_info (Dict[str, str]): Calibration metadata
 
     Returns:
         None
@@ -89,7 +90,8 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
         >>> ground_img = sky_img = np.ones((131, 131), dtype=np.float)
         >>> write_hdf5("test/test.h5", xst_data, visibilities, sky_img, ground_img, "DE603", \
                        297, 3, 150e6, datetime.datetime.now(), [-150, 150, -150, 150], \
-                       [11.709, 11.713, 50.978, 50.981], 1.5, {'Cas A': (0.3, 0.5, 0.2)})
+                       [11.709, 11.713, 50.978, 50.981], 1.5, {'Cas A': (0.3, 0.5, 0.2)}, \
+                       {'CalTableHeader.Calibration.Date': '20181214'})
     """
     short_station_name = station_name[:5]
 
@@ -106,6 +108,8 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
 
         obs_group.create_dataset("xst_data", data=xst_data, compression="gzip")
         obs_group.create_dataset("calibrated_data", data=visibilities, compression="gzip")
+        for key, value in calibration_info.items():
+            obs_group["calibrated_data"].attrs[key] = value
         obs_group.create_dataset("sky_img", data=sky_img, compression="gzip")
 
         ground_img_group = obs_group.create_group("ground_images")
