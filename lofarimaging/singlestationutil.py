@@ -6,8 +6,11 @@ from typing import List, Dict, Tuple, Union
 
 import numpy as np
 from packaging import version
+import tqdm
+import h5py
 
 import matplotlib.pyplot as plt
+import matplotlib.animation
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib import cm
 from matplotlib.figure import Figure
@@ -32,7 +35,7 @@ from .hdf5util import write_hdf5
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_station_pqr", "get_station_type",
            "make_sky_plot", "make_ground_plot", "make_xst_plots", "apply_calibration",
-           "get_full_station_name", "get_extent_lonlat"]
+           "get_full_station_name", "get_extent_lonlat", "make_sky_movie"]
 
 __version__ = "1.5.0"
 
@@ -414,7 +417,7 @@ def make_ground_plot(image: np.ndarray, background_map: np.ndarray, extent: List
 
 def make_sky_plot(image: np.ndarray, marked_bodies_lmn: Dict[str, Tuple[float, float, float]],
                   title: str = "Sky plot", subtitle: str = "", fig: Figure = None,
-                  **kwargs) -> Figure:
+                  label: str = None, **kwargs) -> Figure:
     """
     Make a sky plot out of an array with data
 
@@ -424,6 +427,7 @@ def make_sky_plot(image: np.ndarray, marked_bodies_lmn: Dict[str, Tuple[float, f
         title: Title for the plot
         subtitle: Subtitle for the plot
         fig: existing figure object to be reused
+        label: unique label for axes (only relevant for making animations)
         **kwargs: other options to be passed to plt.imshow (e.g. vmin)
 
     Returns:
@@ -436,7 +440,7 @@ def make_sky_plot(image: np.ndarray, marked_bodies_lmn: Dict[str, Tuple[float, f
     if fig is None:
         fig = plt.figure(figsize=(10, 10))
 
-    ax = fig.add_subplot(1, 1, 1)
+    ax = fig.add_subplot(1, 1, 1, label=label)
     circle1 = Circle((0, 0), 1.0, edgecolor='k', fill=False, facecolor='none', alpha=0.3)
     ax.add_artist(circle1)
 
@@ -751,3 +755,32 @@ def make_xst_plots(xst_data: np.ndarray,
                freq, obstime, extent, extent_lonlat, height, marked_bodies_lmn, calibration_info)
 
     return sky_fig, ground_fig, leaflet_map
+
+
+def make_sky_movie(moviefilename: str, h5file: h5py.File, obsnums: List[str], vmin=None, vmax=None,
+                   marked_bodies=["Cas A", "Cyg A", "Sun"]) -> None:
+    """
+    Make movie of a list of observations
+    """
+    fig = plt.figure(figsize=(10,10))
+    for obsnum in tqdm.tqdm(obsnums):
+        obs_h5 = h5file[obsnum]
+        skydata_h5 = obs_h5["sky_img"]
+        obstime = obs_h5.attrs["obstime"]
+        freq = obs_h5.attrs["frequency"]
+        station_name = obs_h5.attrs["station_name"]
+        subband = obs_h5.attrs["subband"]
+        marked_bodies_lmn = dict(zip(obs_h5.attrs["source_names"], obs_h5.attrs["source_lmn"]))
+        if marked_bodies is not None:
+            marked_bodies_lmn = {k: v for k, v in marked_bodies_lmn.items() if k in marked_bodies}
+        sky_fig = make_sky_plot(skydata_h5[:, :], marked_bodies_lmn,
+                                title=f"Sky image for {station_name}",
+                                subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
+                                animated=True, fig=fig, label=obsnum, vmin=vmin, vmax=vmax);
+
+    # Thanks to Maaijke Mevius for making this animation work!
+    ims = fig.get_children()[1:]
+    ims = [ ims[i:i+2] for i in range(0,len(ims),2) ]
+    ani = matplotlib.animation.ArtistAnimation(fig, ims, interval=30, blit=False, repeat_delay=1000)
+    writer = matplotlib.animation.writers['ffmpeg'](fps=5, bitrate=800)
+    ani.save(moviefilename, writer=writer, dpi=fig.dpi)
