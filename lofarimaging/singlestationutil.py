@@ -310,9 +310,14 @@ def get_station_pqr(station_name: str, rcu_mode: Union[str, int], db):
         >>> pqr[0, 0]
         1.7434713
 
-        >>> pqr = get_station_pqr("LV614", "5", db)
-        >>> pqr.shape
+        >>> get_station_pqr("LV614", "5", db).shape
         (96, 3)
+
+        >>> get_station_pqr("CS103", 5, db).shape
+        (48, 3)
+
+        >>> get_station_pqr("PL611", 6, db).shape
+        (48, 3)
     """
     full_station_name = get_full_station_name(station_name, rcu_mode)
     station_type = get_station_type(full_station_name)
@@ -332,7 +337,12 @@ def get_station_pqr(station_name: str, rcu_mode: Union[str, int], db):
         }
         selected_dipoles = selected_dipole_config[station_type] + \
             np.arange(len(selected_dipole_config[station_type])) * 16
-        station_pqr = db.hba_dipole_pqr(full_station_name)[selected_dipoles]
+        if station_type == 'core':
+            all_dipole_pqr = np.concatenate((db.hba_dipole_pqr(full_station_name + "0"),
+                                             db.hba_dipole_pqr(full_station_name + "1")))
+        else:
+            all_dipole_pqr = db.hba_dipole_pqr(full_station_name)
+        station_pqr = all_dipole_pqr[selected_dipoles]
     else:
         raise RuntimeError("Station name did not contain LBA or HBA, could not load antenna positions")
 
