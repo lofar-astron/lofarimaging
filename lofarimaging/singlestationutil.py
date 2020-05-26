@@ -28,7 +28,7 @@ from lofarantpos.db import LofarAntennaDatabase
 import lofarantpos
 
 from .maputil import get_map, make_leaflet_map
-from .lofarimaging import nearfield_imager, sky_imager, skycoord_to_lmn
+from .lofarimaging import nearfield_imager, sky_imager, skycoord_to_lmn, subtract_sources
 from .hdf5util import write_hdf5
 
 
@@ -565,7 +565,8 @@ def make_xst_plots(xst_data: np.ndarray,
                    sky_only: bool = False,
                    opacity: float = 0.6,
                    hdf5_filename: str = None,
-                   outputpath: str = "results"):
+                   outputpath: str = "results",
+                   subtract: List[str] = None):
     """
     Create sky and ground plots for an XST file
 
@@ -584,6 +585,7 @@ def make_xst_plots(xst_data: np.ndarray,
         opacity: Opacity for map overlay. Defaults to 0.6.
         hdf5_filename: Filename where hdf5 results can be written. Defaults to outputpath + '/results.h5'
         outputpath: Directory where results can be saved. Defaults to 'results'
+        subtract: List of sources to subtract. Defaults to None
 
 
     Returns:
@@ -594,7 +596,8 @@ def make_xst_plots(xst_data: np.ndarray,
         >>> obstime = datetime.datetime(2017, 7, 20, 9, 58, 16)
         >>> sky_fig, ground_fig, leafletmap = make_xst_plots(xst_data, "DE603", obstime, 297, \
                                                              3, caltable_dir="test/CalTables", \
-                                                             hdf5_filename="test/test.h5")
+                                                             hdf5_filename="test/test.h5", \
+                                                             subtract=["Cas A", "Sun"])
         Maximum at -6m east, 70m north of station center (lat/long 50.97998, 11.71118)
 
         >>> type(leafletmap)
@@ -650,10 +653,6 @@ def make_xst_plots(xst_data: np.ndarray,
 
     baselines = station_xyz[:, np.newaxis, :] - station_xyz[np.newaxis, :, :]
 
-    # Fourier transform
-    # visibilities = cube_xx[2,:,:]
-    sky_img = sky_imager(visibilities_stokesI, baselines, freq, npix_l, npix_m)
-
     obstime_astropy = Time(obstime)
     # Determine positions of Cas A and Cyg A
     station_earthlocation = EarthLocation.from_geocentric(*(db.phase_centres[station_name] * u.m))
@@ -679,10 +678,19 @@ def make_xst_plots(xst_data: np.ndarray,
         if body_coord.transform_to(AltAz(location=station_earthlocation, obstime=obstime_astropy)).alt > 0:
             marked_bodies_lmn[body_name] = skycoord_to_lmn(marked_bodies[body_name], zenith)
 
+    if subtract is not None:
+        visibilities_stokesI = subtract_sources(visibilities_stokesI, baselines, freq, marked_bodies_lmn, subtract)
+
+    sky_img = sky_imager(visibilities_stokesI, baselines, freq, npix_l, npix_m)
+
     marked_bodies_lmn_only3 = {k: v for (k, v) in marked_bodies_lmn.items() if k in ('Cas A', 'Cyg A', 'Sun')}
 
     # Plot the resulting sky image
     sky_fig = plt.figure(figsize=(10, 10))
+
+    if sky_vmin is None and subtract is not None:
+        # Tendency to oversubtract, we don't want to see that
+        sky_vmin = np.quantile(sky_img, 0.05)
 
     make_sky_plot(sky_img, marked_bodies_lmn_only3, title=f"Sky image for {station_name}",
                   subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}", fig=sky_fig,
@@ -731,10 +739,9 @@ def make_xst_plots(xst_data: np.ndarray,
     [maxpixel_p, maxpixel_q, _] = pqr_to_xyz.T @ np.array([maxpixel_x, maxpixel_y, height])
     maxpixel_lon, maxpixel_lat, _ = lofargeotiff.pqr_to_longlatheight([maxpixel_p, maxpixel_q], station_name)
 
-    # Show location of maximum if not at the image border
-    if 2 < maxpixel_xpix < npix_x - 2 and 2 < maxpixel_ypix < npix_y - 2:
-        print(f"Maximum at {maxpixel_x:.0f}m east, {maxpixel_y:.0f}m north of station center " +
-              f"(lat/long {maxpixel_lat:.5f}, {maxpixel_lon:.5f})")
+    # Show location of maximum
+    print(f"Maximum at {maxpixel_x:.0f}m east, {maxpixel_y:.0f}m north of station center " +
+          f"(lat/long {maxpixel_lat:.5f}, {maxpixel_lon:.5f})")
 
     tags = {"generated_with": f"lofarimaging v{__version__}",
             "subband": subband,
@@ -752,7 +759,7 @@ def make_xst_plots(xst_data: np.ndarray,
     leaflet_map = make_leaflet_map(folium_overlay, lon_center, lat_center, lon_min, lat_min, lon_max, lat_max)
 
     write_hdf5(hdf5_filename, xst_data, visibilities, sky_img, ground_img, station_name, subband, rcu_mode,
-               freq, obstime, extent, extent_lonlat, height, marked_bodies_lmn, calibration_info)
+               freq, obstime, extent, extent_lonlat, height, marked_bodies_lmn, calibration_info, subtract)
 
     return sky_fig, ground_fig, leaflet_map
 

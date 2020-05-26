@@ -1,5 +1,6 @@
 """Functions for working with LOFAR single station data"""
 
+from typing import Dict, List
 import numpy as np
 from numpy.linalg import norm, lstsq
 import numexpr as ne
@@ -7,7 +8,8 @@ import numba
 from astropy.coordinates import SkyCoord, SkyOffsetFrame, CartesianRepresentation
 
 
-__all__ = ["nearfield_imager", "sky_imager", "ground_imager", "skycoord_to_lmn", "calibrate", "simulate_sky_source"]
+__all__ = ["nearfield_imager", "sky_imager", "ground_imager", "skycoord_to_lmn", "calibrate", "simulate_sky_source",
+           "subtract_sources"]
 
 __version__ = "1.5.0"
 SPEED_OF_LIGHT = 299792458.0
@@ -180,13 +182,25 @@ def simulate_sky_source(lmn_coord: np.array, baselines: np.array, freq: float):
     return np.exp(2j * np.pi * freq * baselines.dot(np.array(lmn_coord)) / SPEED_OF_LIGHT)
 
 
-def simulate_nearfield_source(pqr_coord: np.array, baselines: np.array, freq: float):
+def subtract_sources(vis: np.array, baselines: np.array, freq: float, lmn_dict: Dict[str, np.array],
+                     sources=["Cas A", "Cyg A", "Sun"]):
     """
-    Simulate visibilities for a nearfield source
+    Subtract sky sources from visibilities
 
     Args:
-        pqr_coord (np.array): l, m, n coordinate
+        vis (np.array): visibility matrix, shape [n_ant, n_ant]
+        lmn_dict (Dict[str, np.array]): dictionary with lmn coordinates
         baselines (np.array): baseline distances in metres, shape (n_ant, n_ant)
         freq (float): Frequency in Hz
+        sources (List[str]): list with source names to subtract (should all be in lmn_dict).
+                             Default ["Cas A", "Sun"]
+
+    Returns:
+        vis (np.array): visibility matrix with sources subtracted
     """
-    pass
+    modelvis = [simulate_sky_source(lmn_dict[srcname], baselines, freq) for srcname in lmn_dict
+                if srcname in sources]
+
+    residual, _ = calibrate(vis, modelvis)
+
+    return residual

@@ -25,6 +25,10 @@ Per observation, the following attributes are used:
  * extent_lonlat   Extent of image in longitude and latitude (w.r.t. WGS84 ellipsoid)
                    [lon_min, lon_max, lat_min, lat_max]
  * height          Height (w.r.t. station phase centre) of the image plane in metres
+ * subtracted      List of sources subtracted from visibilities
+
+ For sky images, the following attributes are used:
+ * subtracted      List of sources subtracted from visibilities
 """
 
 import datetime
@@ -61,7 +65,8 @@ def get_new_obsname(h5file: h5py.File):
 def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sky_img: np.ndarray,
                ground_img: np.ndarray, station_name: str, subband: int, rcu_mode: int, frequency: float,
                obstime: datetime.datetime, extent: List[float], extent_lonlat: List[float],
-               height: float, bodies_lmn: Dict[str, Tuple[float]], calibration_info: Dict[str, str]):
+               height: float, bodies_lmn: Dict[str, Tuple[float]], calibration_info: Dict[str, str],
+               subtracted: List[str]):
     """
     Write an HDF5 file with all data
 
@@ -81,6 +86,7 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
         height (float): Height of ground image (in metres)
         bodies_lmn (Dict[str, Tuple[float]]): lmn coordinates of some objects on the sky
         calibration_info (Dict[str, str]): Calibration metadata
+        subtracted (List[str]): List of sources subtracted
 
     Returns:
         None
@@ -91,7 +97,7 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
         >>> write_hdf5("test/test.h5", xst_data, visibilities, sky_img, ground_img, "DE603", \
                        297, 3, 150e6, datetime.datetime.now(), [-150, 150, -150, 150], \
                        [11.709, 11.713, 50.978, 50.981], 1.5, {'Cas A': (0.3, 0.5, 0.2)}, \
-                       {'CalTableHeader.Calibration.Date': '20181214'})
+                       {'CalTableHeader.Calibration.Date': '20181214'}, ["Cas A", "Sun"])
     """
     short_station_name = station_name[:5]
 
@@ -110,13 +116,15 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
         obs_group.create_dataset("calibrated_data", data=visibilities, compression="gzip")
         for key, value in calibration_info.items():
             obs_group["calibrated_data"].attrs[key] = value
-        obs_group.create_dataset("sky_img", data=sky_img, compression="gzip")
+        dataset_sky_img = obs_group.create_dataset("sky_img", data=sky_img, compression="gzip")
+        dataset_sky_img.attrs["subtracted"] = subtracted
 
         ground_img_group = obs_group.create_group("ground_images")
         dataset_ground_img = ground_img_group.create_dataset("ground_img000", data=ground_img, compression="gzip")
         dataset_ground_img.attrs["extent"] = extent
         dataset_ground_img.attrs["extent_lonlat"] = extent_lonlat
         dataset_ground_img.attrs["height"] = height
+        dataset_ground_img.attrs["subtracted"] = str(subtracted)
 
 
 def merge_hdf5(src_filename: str, dest_filename: str, obslist: List[str] = None):
