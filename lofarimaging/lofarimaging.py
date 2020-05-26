@@ -1,12 +1,13 @@
 """Functions for working with LOFAR single station data"""
 
 import numpy as np
+from numpy.linalg import norm, lstsq
 import numexpr as ne
 import numba
 from astropy.coordinates import SkyCoord, SkyOffsetFrame, CartesianRepresentation
 
 
-__all__ = ["nearfield_imager", "sky_imager", "ground_imager", "skycoord_to_lmn"]
+__all__ = ["nearfield_imager", "sky_imager", "ground_imager", "skycoord_to_lmn", "calibrate", "simulate_sky_source"]
 
 __version__ = "1.5.0"
 SPEED_OF_LIGHT = 299792458.0
@@ -130,3 +131,62 @@ def nearfield_imager(visibilities, baseline_indices, freqs, npix_p, npix_q, exte
     img /= len(freqs) * len(baseline_indices)
 
     return img
+
+
+def calibrate(vis, modelvis, maxiter=30, amplitudeonly=True):
+    """
+    Calibrate and subtract some sources
+
+    Args:
+        vis: visibility matrix, shape [n_st, n_st]
+        modelvis: model visibility matrices, shape [n_dir, n_st, n_st]
+        maxiter: max iterations (default 30)
+        amplitudeonly: fit only amplitudes (default True)
+
+    Returns:
+        residual: visibilities with calibrated directions subtracted, shape [n_st, n_st]
+        gains: gains, shape [n_dir, n_st]
+    """
+    nst = vis.shape[1]
+    ndir = np.array(modelvis).shape[0]
+    gains = np.ones([ndir, nst], dtype=np.complex) * np.sqrt(norm(vis) / norm(modelvis))
+    iteration = 0
+    while iteration < maxiter:
+        iteration += 1
+        gains_prev = gains.copy()
+        for k in range(nst):
+            z = np.conj(gains_prev) * np.array(modelvis)[:, :, k]
+            gains[:, k] = lstsq(z.T, vis[:, k], rcond=None)[0]
+        if amplitudeonly:
+            gains = np.abs(gains).astype(np.complex)
+        if iteration % 2 == 0 and iteration > 0:
+            dg = norm(gains - gains_prev)
+            residual = vis.copy()
+            for d in range(ndir):
+                residual -= np.diag(np.conj(gains[d])) @ modelvis[d] @ np.diag(gains[d])
+            gains = 0.5 * gains + 0.5 * gains_prev
+    return residual, gains
+
+
+def simulate_sky_source(lmn_coord: np.array, baselines: np.array, freq: float):
+    """
+    Simulate visibilities for a sky source
+
+    Args:
+        lmn_coord (np.array): l, m, n coordinate
+        baselines (np.array): baseline distances in metres, shape (n_ant, n_ant)
+        freq (float): Frequency in Hz
+    """
+    return np.exp(2j * np.pi * freq * baselines.dot(np.array(lmn_coord)) / SPEED_OF_LIGHT)
+
+
+def simulate_nearfield_source(pqr_coord: np.array, baselines: np.array, freq: float):
+    """
+    Simulate visibilities for a nearfield source
+
+    Args:
+        pqr_coord (np.array): l, m, n coordinate
+        baselines (np.array): baseline distances in metres, shape (n_ant, n_ant)
+        freq (float): Frequency in Hz
+    """
+    pass
