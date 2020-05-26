@@ -773,14 +773,14 @@ def make_sky_movie(moviefilename: str, h5file: h5py.File, obsnums: List[str], vm
         marked_bodies_lmn = dict(zip(obs_h5.attrs["source_names"], obs_h5.attrs["source_lmn"]))
         if marked_bodies is not None:
             marked_bodies_lmn = {k: v for k, v in marked_bodies_lmn.items() if k in marked_bodies}
-        sky_fig = make_sky_plot(skydata_h5[:, :], marked_bodies_lmn,
-                                title=f"Sky image for {station_name}",
-                                subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
-                                animated=True, fig=fig, label=obsnum, vmin=vmin, vmax=vmax);
+        make_sky_plot(skydata_h5[:, :], marked_bodies_lmn,
+                      title=f"Sky image for {station_name}",
+                      subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
+                      animated=True, fig=fig, label=obsnum, vmin=vmin, vmax=vmax)
 
     # Thanks to Maaijke Mevius for making this animation work!
     ims = fig.get_children()[1:]
-    ims = [ ims[i:i+2] for i in range(0,len(ims),2) ]
+    ims = [ims[i:i+2] for i in range(0, len(ims), 2)]
     ani = matplotlib.animation.ArtistAnimation(fig, ims, interval=30, blit=False, repeat_delay=1000)
     writer = matplotlib.animation.writers['ffmpeg'](fps=5, bitrate=800)
     ani.save(moviefilename, writer=writer, dpi=fig.dpi)
