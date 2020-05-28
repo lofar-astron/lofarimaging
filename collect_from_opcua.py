@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import matplotlib
+matplotlib.use("Agg")
 import time
 from lofarimaging.opc_interface import download_xst
 from lofarimaging import make_xst_plots
@@ -30,7 +32,7 @@ if __name__ == "__main__":
 
     while True:
         for station_name in ("RS210", "RS208", "CS103"):
-            for subband in (150, 250, 350, 375, 400, 425):
+            for subband in (150, 250, 300, 350, 375, 400):
                 thread = threading.Thread(target=download_and_image, args=(station_name, subband))
                 thread.start()
                 time.sleep(30)
