@@ -13,7 +13,7 @@ def test_compute_calibrated_model():
     vis = numpy.diag(numpy.ones((10)))
     model_vis = numpy.diag(numpy.ones(10))
     # ----TEST
-    calibrated, residual = compute_calibrated_model(vis, model_vis)
+    calibrated, gains, residual = compute_calibrated_model(vis, model_vis)
     assert_almost_equal(calibrated, vis)
     assert residual < 1.e-5
 
@@ -65,7 +65,7 @@ def test_estimate_model_visibilities():
     assert_almost_equal(visibilities, model_visibilities)
 
 
-def test_self_cal():
+def test_self_cal_zero_residual():
     # ----TEST DATA
     source_position = numpy.zeros((1, 3))
     visibilities = numpy.ones((2, 2))
@@ -73,5 +73,5 @@ def test_self_cal():
     baselines[0, 1, :] = [1, 0, 0]
     baselines[1, 0, :] = [1, 0, 0]
     # ----TEST
-    calibrated_model = self_cal(visibilities, source_position, baselines, 1)
+    calibrated_model, _ = self_cal(visibilities, source_position, baselines, 1)
     assert_almost_equal(calibrated_model, visibilities)

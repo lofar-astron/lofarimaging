@@ -183,6 +183,7 @@ def compute_calibrated_model(vis, model_vis, maxiter=30):
         maxiter: max iterations (default 30)
     Returns:
         calibrated: model visibilities, shape [n_st, n_st]
+        gains: the antenna grains, shape [n_st]
         residual: amplitude difference between model and actual visibilities, float
     """
 
@@ -199,11 +200,11 @@ def compute_calibrated_model(vis, model_vis, maxiter=30):
 
     result = scipy.optimize.minimize(gains_difference, gain_phase, args=(vis, model_vis), options={'maxiter': maxiter})
     gain_phase = result.x
-    gains_mat = np.diag(np.exp(1.j * gain_phase))
-
+    gains = np.exp(1.j * gain_phase)
+    gains_mat = np.diag(gains)
     calibrated = np.conj(gains_mat) @ model_vis @ gains_mat
 
-    return calibrated, gains_difference(gain_phase, vis, model_vis)
+    return calibrated, gains, gains_difference(gain_phase, vis, model_vis)
 
 
 def compute_pointing_matrix(sources_positions, baselines, frequency):
@@ -274,27 +275,36 @@ def estimate_model_visibilities(sources_positions, visibilities, baselines, freq
     return model
 
 
-def self_cal(visibilities, expected_sources, baselines, frequency, iterations=10):
+def self_cal(visibilities, expected_sources, baselines, frequency, max_iterations=10, tollerance=1.e-4):
     """
     Compute the gain phase comparing the model and the actual visibilities returning
     the model with the gain phase correction applied.
 
-    TODO introduce a valid stop condition and make the iteration parameters a max_iter parameter
 
     Args:
         visibilities: visibilities, shape [n_st, n_st]
         expected_sources: lmn coords of the sources, shape [n_dir, 3]
         baselines: baselines matrix in m, shape [n_st, n_st, 3]
         frequency: frequency
-        iterations: number of iterations to perform
+        max_iterations: maximum number of iterations to perform
     Returns:
         model: the model visibilities with the applied gains, shape [n_st, n_st]
+        gains: the antenna gains, shape [n_st]
+
     """
     model = estimate_model_visibilities(expected_sources, visibilities, baselines, frequency)
-    for i in range(iterations):
-        model, residual = compute_calibrated_model(visibilities, model, maxiter=50)
-        logging.debug('residual after iteration %d: %s', i, residual)
-    return model
+    model, gains,  residual = compute_calibrated_model(visibilities, model, maxiter=50)
+    for i in range(1, max_iterations):
+        model, gains, next_residual = compute_calibrated_model(visibilities, model, maxiter=50)
+        print(i, residual, next_residual)
+        if next_residual == 0:
+            break
+        elif abs(1 - (residual / next_residual)) >= tollerance:
+            residual = next_residual
+        else:
+            break
+
+    return model, gains
 
 
 def simulate_sky_source(lmn_coord: np.array, baselines: np.array, freq: float):
