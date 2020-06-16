@@ -1,12 +1,14 @@
 """Functions for working with LOFAR single station data"""
 
+import logging
 from typing import Dict, List
-import numpy as np
-from numpy.linalg import norm, lstsq
-import numexpr as ne
-import numba
-from astropy.coordinates import SkyCoord, SkyOffsetFrame, CartesianRepresentation
 
+import numba
+import numexpr as ne
+import numpy as np
+import scipy.optimize
+from astropy.coordinates import SkyCoord, SkyOffsetFrame, CartesianRepresentation
+from numpy.linalg import norm, lstsq
 
 __all__ = ["nearfield_imager", "sky_imager", "ground_imager", "skycoord_to_lmn", "calibrate", "simulate_sky_source",
            "subtract_sources"]
@@ -168,6 +170,70 @@ def calibrate(vis, modelvis, maxiter=30, amplitudeonly=True):
                 residual -= np.diag(np.conj(gains[d])) @ modelvis[d] @ np.diag(gains[d])
             gains = 0.5 * gains + 0.5 * gains_prev
     return residual, gains
+
+
+def compute_calibrated_model(vis, model_vis, maxiter=30):
+    n_ant = vis.shape[0]
+    gain_phase = np.zeros((n_ant), dtype=complex)
+
+    def gains_difference(gain_phase, vis, model_vis):
+        gains = np.exp(1.j * gain_phase)
+        gains_mat = np.diag(gains)
+        gains_mat_star = np.diag(np.conj(gains))
+        predicted = gains_mat_star @ model_vis @ gains_mat
+        residual = np.sum(np.abs(vis - predicted))
+        return residual
+
+    result = scipy.optimize.minimize(gains_difference, gain_phase, args=(vis, model_vis), options={'maxiter': maxiter})
+    gain_phase = result.x
+    gains_mat = np.diag(np.exp(1.j * gain_phase))
+
+    calibrated = np.conj(gains_mat) @ model_vis @ gains_mat
+
+    return calibrated, gains_difference(gain_phase, vis, model_vis)
+
+
+def compute_pointing_matrix(sources_positions, baselines, frequency):
+    n_baselines = baselines.shape[0]
+    n_sources = sources_positions.shape[0]
+
+    pointing_matrix = np.zeros(shape=(n_baselines, n_baselines, n_sources), dtype=complex)
+
+    for q in range(n_sources):
+        pointing_matrix[:, :, q] = simulate_sky_source(sources_positions[q, :], baselines, frequency)
+    return pointing_matrix
+
+
+def estimate_sources_flux(visibilities, pointing_matrix):
+    def residual_flux(signal, vis, point_matrix):
+        residual = vis - point_matrix @ signal
+        residual = np.sum(np.abs(residual))
+        return residual
+
+    n_antennas = visibilities.shape[0]
+    n_sources = pointing_matrix.shape[2]
+    lin_visibilities = visibilities.reshape((n_antennas * n_antennas))
+    lin_pointing_matrix = pointing_matrix.reshape((n_antennas * n_antennas, n_sources))
+    fluxes, *_ = np.linalg.lstsq(lin_pointing_matrix, lin_visibilities)
+
+    result = scipy.optimize.minimize(residual_flux, fluxes, args=(visibilities, pointing_matrix))
+    return result.x
+
+
+def estimate_model_visibilities(sources_positions, visibilities, baselines, frequency):
+    pointing_matrix = compute_pointing_matrix(sources_positions, baselines, frequency)
+    fluxes = estimate_sources_flux(visibilities, pointing_matrix)
+    model = pointing_matrix @ fluxes
+
+    return model
+
+
+def self_cal(visibilities, expected_sources, baselines, frequency, iterations=10):
+    model = estimate_model_visibilities(expected_sources, visibilities, baselines, frequency)
+    for i in range(iterations):
+        model, residual = compute_calibrated_model(visibilities, model, maxiter=50)
+        logging.debug('residual after iteration %d: %s', i, residual)
+    return model
 
 
 def simulate_sky_source(lmn_coord: np.array, baselines: np.array, freq: float):
