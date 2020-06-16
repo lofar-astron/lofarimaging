@@ -13,3 +13,4 @@ Pillow
 opcua
 h5py
 tqdm
+scipy
