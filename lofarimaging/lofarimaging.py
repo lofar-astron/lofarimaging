@@ -1,15 +1,18 @@
 """Functions for working with LOFAR single station data"""
 
+import logging
 from typing import Dict, List
-import numpy as np
-from numpy.linalg import norm, lstsq
-import numexpr as ne
-import numba
-from astropy.coordinates import SkyCoord, SkyOffsetFrame, CartesianRepresentation
 
+import numba
+import numexpr as ne
+import numpy as np
+import scipy.optimize
+from astropy.coordinates import SkyCoord, SkyOffsetFrame, CartesianRepresentation
+from numpy.linalg import norm, lstsq
 
 __all__ = ["nearfield_imager", "sky_imager", "ground_imager", "skycoord_to_lmn", "calibrate", "simulate_sky_source",
-           "subtract_sources"]
+           "subtract_sources", "compute_calibrated_model", "compute_pointing_matrix", "estimate_model_visibilities",
+           "estimate_sources_flux", "self_cal"]
 
 __version__ = "1.5.0"
 SPEED_OF_LIGHT = 299792458.0
@@ -170,13 +173,144 @@ def calibrate(vis, modelvis, maxiter=30, amplitudeonly=True):
     return residual, gains
 
 
+def compute_calibrated_model(vis, model_vis, maxiter=30):
+    """
+    Calibrate the gains phases and apply to the model
+
+    Args:
+        vis: visibility matrix, shape [n_st, n_st]
+        model_vis: model visibility matrix, shape [n_st, n_st]
+        maxiter: max iterations (default 30)
+    Returns:
+        calibrated: model visibilities, shape [n_st, n_st]
+        gains: the antenna gains, shape [n_st]
+        residual: amplitude difference between model and actual visibilities, float
+    """
+
+    n_ant = vis.shape[0]
+    gain_phase = np.zeros((n_ant), dtype=complex)
+
+    def gains_difference(gain_phase, vis, model_vis):
+        gains = np.exp(1.j * gain_phase)
+        gains_mat = np.diag(gains)
+        gains_mat_star = np.diag(np.conj(gains))
+        predicted = gains_mat_star @ model_vis @ gains_mat
+        residual = np.sum(np.abs(vis - predicted))
+        return residual
+
+    result = scipy.optimize.minimize(gains_difference, gain_phase, args=(vis, model_vis), options={'maxiter': maxiter})
+    gain_phase = result.x
+    gains = np.exp(1.j * gain_phase)
+    gains_mat = np.diag(gains)
+    calibrated = np.conj(gains_mat) @ model_vis @ gains_mat
+
+    return calibrated, gains, gains_difference(gain_phase, vis, model_vis)
+
+
+def compute_pointing_matrix(sources_positions, baselines, frequency):
+    """
+    Compute the pointing matrix used to compute the visibilities from
+    the sources position
+
+    Args:
+        sources_positions: matrix of the lmn sources position, shape [n_dir, 3]
+        baselines: baseline matrix, shape [n_st, n_st]
+        frequency: frequency
+    Returns:
+        pointing_matrix: pointing matrix, shape [n_st, n_st, n_dir]
+    """
+    n_baselines = baselines.shape[0]
+    n_sources = sources_positions.shape[0]
+
+    pointing_matrix = np.zeros(shape=(n_baselines, n_baselines, n_sources), dtype=complex)
+
+    for q in range(n_sources):
+        pointing_matrix[:, :, q] = simulate_sky_source(sources_positions[q, :], baselines, frequency)
+    return pointing_matrix
+
+
+def estimate_sources_flux(visibilities, pointing_matrix):
+    """
+    Estimate the flux of the sources given the pointing matrix and the measured visibilities
+
+    Args:
+        visibilities: visibilities, shape [n_st, n_st]
+        pointing_matrix: pointing matrix, shape [n_st, n_st, n_dir]
+    Returns:
+        fluxes: amplitude of the source at the given direction, shape [n_st, n_st, n_dir]
+    """
+
+    def residual_flux(signal, vis, point_matrix):
+        residual = vis - point_matrix @ signal
+        residual = np.sum(np.abs(residual))
+        return residual
+
+    n_antennas = visibilities.shape[0]
+    n_sources = pointing_matrix.shape[2]
+    lin_visibilities = visibilities.reshape((n_antennas * n_antennas))
+    lin_pointing_matrix = pointing_matrix.reshape((n_antennas * n_antennas, n_sources))
+    fluxes, *_ = np.linalg.lstsq(lin_pointing_matrix, lin_visibilities)
+
+    result = scipy.optimize.minimize(residual_flux, fluxes, args=(visibilities, pointing_matrix))
+    fluxes = result.x
+    return fluxes
+
+
+def estimate_model_visibilities(sources_positions, visibilities, baselines, frequency):
+    """
+    Estimate the visibilities of the models given the sources position and the measured visibilities
+
+    Args:
+        sources_positions: lmn coords of the sources, shape [n_dir, 3]
+        visibilities: visibilities, shape [n_st, n_st]
+        baselines: baselines matrix in m, shape [n_st, n_st, 3]
+        frequency: frequency
+    Returns:
+        model: the model visibilities, shape [n_st, n_st]
+    """
+    pointing_matrix = compute_pointing_matrix(sources_positions, baselines, frequency)
+    fluxes = estimate_sources_flux(visibilities, pointing_matrix)
+    model = pointing_matrix @ fluxes
+
+    return model
+
+
+def self_cal(visibilities, expected_sources, baselines, frequency, max_iterations=10, tolerance=1.e-4):
+    """
+    Compute the gain phase comparing the model and the actual visibilities returning
+    the model with the gain phase correction applied.
+
+
+    Args:
+        visibilities: visibilities, shape [n_st, n_st]
+        expected_sources: lmn coords of the sources, shape [n_dir, 3]
+        baselines: baselines matrix in m, shape [n_st, n_st, 3]
+        frequency: frequency
+        max_iterations: maximum number of iterations to perform
+    Returns:
+        model: the model visibilities with the applied gains, shape [n_st, n_st]
+        gains: the antenna gains, shape [n_st]
+
+    """
+    model = estimate_model_visibilities(expected_sources, visibilities, baselines, frequency)
+    model, gains,  residual = compute_calibrated_model(visibilities, model, maxiter=50)
+    for i in range(1, max_iterations):
+        model, gains, next_residual = compute_calibrated_model(visibilities, model, maxiter=50)
+        if next_residual != 0 and abs(1 - (residual / next_residual)) >= tolerance:
+            residual = next_residual
+        else:
+            break
+
+    return model, gains
+
+
 def simulate_sky_source(lmn_coord: np.array, baselines: np.array, freq: float):
     """
     Simulate visibilities for a sky source
 
     Args:
         lmn_coord (np.array): l, m, n coordinate
-        baselines (np.array): baseline distances in metres, shape (n_ant, n_ant)
+        baselines (np.array): baseline distances in metres, shape (n_ant, n_ant, 3)
         freq (float): Frequency in Hz
     """
     return np.exp(2j * np.pi * freq * baselines.dot(np.array(lmn_coord)) / SPEED_OF_LIGHT)

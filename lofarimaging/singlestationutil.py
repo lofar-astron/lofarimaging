@@ -1,36 +1,32 @@
 """Functions for working with LOFAR single station data"""
 
-import os
 import datetime
+import os
 from typing import List, Dict, Tuple, Union
 
-import numpy as np
-from packaging import version
-import tqdm
-import h5py
-
-import matplotlib.pyplot as plt
-import matplotlib.animation
-from matplotlib.ticker import FormatStrFormatter
-from matplotlib import cm
-from matplotlib.figure import Figure
-from matplotlib.colors import ListedColormap, Normalize
-from matplotlib.patches import Circle
-import matplotlib.axes as maxes
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, get_sun, get_moon
 import astropy.units as u
-from astropy.time import Time
-
-import lofargeotiff
-from lofarantpos.db import LofarAntennaDatabase
+import h5py
 import lofarantpos
+import lofargeotiff
+import matplotlib.animation
+import matplotlib.axes as maxes
+import matplotlib.pyplot as plt
+import numpy as np
+import tqdm
+from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, get_sun, get_moon
+from astropy.time import Time
+from lofarantpos.db import LofarAntennaDatabase
+from matplotlib import cm
+from matplotlib.colors import ListedColormap, Normalize
+from matplotlib.figure import Figure
+from matplotlib.patches import Circle
+from matplotlib.ticker import FormatStrFormatter
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from packaging import version
 
-from .maputil import get_map, make_leaflet_map
-from .lofarimaging import nearfield_imager, sky_imager, skycoord_to_lmn, subtract_sources
 from .hdf5util import write_hdf5
-
+from .lofarimaging import nearfield_imager, sky_imager, skycoord_to_lmn, subtract_sources
+from .maputil import get_map, make_leaflet_map
 
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "rcus_in_station", "read_acm_cube", "get_station_pqr", "get_station_type",
@@ -331,7 +327,7 @@ def get_station_pqr(station_name: str, rcu_mode: Union[str, int], db):
             'intl': GENERIC_INT_201512, 'remote': GENERIC_REMOTE_201512, 'core': GENERIC_CORE_201512
         }
         selected_dipoles = selected_dipole_config[station_type] + \
-            np.arange(len(selected_dipole_config[station_type])) * 16
+                           np.arange(len(selected_dipole_config[station_type])) * 16
         station_pqr = db.hba_dipole_pqr(full_station_name)[selected_dipoles]
     else:
         raise RuntimeError("Station name did not contain LBA or HBA, could not load antenna positions")
@@ -340,7 +336,7 @@ def get_station_pqr(station_name: str, rcu_mode: Union[str, int], db):
 
 
 def make_ground_plot(image: np.ndarray, background_map: np.ndarray, extent: List[float], title: str = "Ground plot",
-        subtitle: str = "", opacity: float = 0.6, fig: Figure = None, draw_contours: bool = True, **kwargs) \
+                     subtitle: str = "", opacity: float = 0.6, fig: Figure = None, draw_contours: bool = True, **kwargs) \
         -> Tuple[Figure, np.ndarray]:
     """
     Make a ground plot of an array with data
@@ -585,7 +581,6 @@ def make_xst_plots(xst_data: np.ndarray,
         opacity: Opacity for map overlay. Defaults to 0.6.
         hdf5_filename: Filename where hdf5 results can be written. Defaults to outputpath + '/results.h5'
         outputpath: Directory where results can be saved. Defaults to 'results'
-        subtract: List of sources to subtract. Defaults to None
 
 
     Returns:
@@ -662,14 +657,14 @@ def make_xst_plots(xst_data: np.ndarray,
     marked_bodies = {
         'Cas A': SkyCoord(ra=350.85 * u.deg, dec=58.815 * u.deg),
         'Cyg A': SkyCoord(ra=299.86815191 * u.deg, dec=40.73391574 * u.deg),
-        'Per A': SkyCoord(ra=49.95066567*u.deg, dec=41.51169838 * u.deg),
-        'Her A': SkyCoord(ra=252.78343333*u.deg, dec=4.99303056*u.deg),
-        'Cen A': SkyCoord(ra=201.36506288*u.deg, dec=-43.01911267*u.deg),
-        'Vir A': SkyCoord(ra=187.70593076*u.deg, dec=12.39112329*u.deg),
-        '3C295': SkyCoord(ra=212.83527917*u.deg, dec=52.20264444*u.deg),
+        'Per A': SkyCoord(ra=49.95066567 * u.deg, dec=41.51169838 * u.deg),
+        'Her A': SkyCoord(ra=252.78343333 * u.deg, dec=4.99303056 * u.deg),
+        'Cen A': SkyCoord(ra=201.36506288 * u.deg, dec=-43.01911267 * u.deg),
+        'Vir A': SkyCoord(ra=187.70593076 * u.deg, dec=12.39112329 * u.deg),
+        '3C295': SkyCoord(ra=212.83527917 * u.deg, dec=52.20264444 * u.deg),
         'Moon': get_moon(obstime_astropy, location=station_earthlocation).transform_to(GCRS),
         'Sun': get_sun(obstime_astropy),
-        '3C196': SkyCoord(ra=123.40023371*u.deg, dec=48.21739888*u.deg)
+        '3C196': SkyCoord(ra=123.40023371 * u.deg, dec=48.21739888 * u.deg)
     }
 
     marked_bodies_lmn = {}
@@ -752,7 +747,7 @@ def make_xst_plots(xst_data: np.ndarray,
             "pixels_per_metre": pixels_per_metre}
     tags.update(calibration_info)
     lon_min, lon_max, lat_min, lat_max = extent_lonlat
-    lofargeotiff.write_geotiff(ground_img[::-1,:], os.path.join(outputpath, f"{fname}_nearfield_calibrated.tiff"),
+    lofargeotiff.write_geotiff(ground_img[::-1, :], os.path.join(outputpath, f"{fname}_nearfield_calibrated.tiff"),
                                (lon_min, lat_max), (lon_max, lat_min), as_pqr=False,
                                stationname=station_name, obsdate=obstime, tags=tags)
 
@@ -769,7 +764,7 @@ def make_sky_movie(moviefilename: str, h5file: h5py.File, obsnums: List[str], vm
     """
     Make movie of a list of observations
     """
-    fig = plt.figure(figsize=(10,10))
+    fig = plt.figure(figsize=(10, 10))
     for obsnum in tqdm.tqdm(obsnums):
         obs_h5 = h5file[obsnum]
         skydata_h5 = obs_h5["sky_img"]
@@ -787,7 +782,28 @@ def make_sky_movie(moviefilename: str, h5file: h5py.File, obsnums: List[str], vm
 
     # Thanks to Maaijke Mevius for making this animation work!
     ims = fig.get_children()[1:]
-    ims = [ims[i:i+2] for i in range(0, len(ims), 2)]
+    ims = [ims[i:i + 2] for i in range(0, len(ims), 2)]
     ani = matplotlib.animation.ArtistAnimation(fig, ims, interval=30, blit=False, repeat_delay=1000)
     writer = matplotlib.animation.writers['ffmpeg'](fps=5, bitrate=800)
     ani.save(moviefilename, writer=writer, dpi=fig.dpi)
+
+
+def compute_baselines(station_name, rcu_mode):
+    # Setup the database
+    db = LofarAntennaDatabase()
+
+    station_pqr = get_station_pqr(station_name, rcu_mode, db)
+
+    station_name = get_full_station_name(station_name, rcu_mode)
+
+    # Rotate station_pqr to a north-oriented xyz frame, where y points North, in a plane through the station.
+    rotation = db.rotation_from_north(station_name)
+
+    pqr_to_xyz = np.array([[np.cos(-rotation), -np.sin(-rotation), 0],
+                           [np.sin(-rotation), np.cos(-rotation), 0],
+                           [0, 0, 1]])
+
+    station_xyz = (pqr_to_xyz @ station_pqr.T).T
+
+    baselines = station_xyz[:, np.newaxis, :] - station_xyz[np.newaxis, :, :]
+    return baselines
