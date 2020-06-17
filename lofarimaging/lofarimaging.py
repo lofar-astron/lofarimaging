@@ -183,7 +183,7 @@ def compute_calibrated_model(vis, model_vis, maxiter=30):
         maxiter: max iterations (default 30)
     Returns:
         calibrated: model visibilities, shape [n_st, n_st]
-        gains: the antenna grains, shape [n_st]
+        gains: the antenna gains, shape [n_st]
         residual: amplitude difference between model and actual visibilities, float
     """
 
@@ -275,7 +275,7 @@ def estimate_model_visibilities(sources_positions, visibilities, baselines, freq
     return model
 
 
-def self_cal(visibilities, expected_sources, baselines, frequency, max_iterations=10, tollerance=1.e-4):
+def self_cal(visibilities, expected_sources, baselines, frequency, max_iterations=10, tolerance=1.e-4):
     """
     Compute the gain phase comparing the model and the actual visibilities returning
     the model with the gain phase correction applied.
@@ -296,10 +296,7 @@ def self_cal(visibilities, expected_sources, baselines, frequency, max_iteration
     model, gains,  residual = compute_calibrated_model(visibilities, model, maxiter=50)
     for i in range(1, max_iterations):
         model, gains, next_residual = compute_calibrated_model(visibilities, model, maxiter=50)
-        print(i, residual, next_residual)
-        if next_residual == 0:
-            break
-        elif abs(1 - (residual / next_residual)) >= tollerance:
+        if next_residual != 0 and abs(1 - (residual / next_residual)) >= tolerance:
             residual = next_residual
         else:
             break
