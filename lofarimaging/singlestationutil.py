@@ -33,9 +33,9 @@ from .hdf5util import write_hdf5
 
 
 __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
-           "rcus_in_station", "read_acm_cube", "get_station_pqr", "get_station_type",
+           "rcus_in_station", "read_acm_cube", "get_station_pqr", "get_station_xyz", "get_station_type",
            "make_sky_plot", "make_ground_plot", "make_xst_plots", "apply_calibration",
-           "get_full_station_name", "get_extent_lonlat", "make_sky_movie"]
+           "get_full_station_name", "get_extent_lonlat", "make_sky_movie", "reimage_sky"]
 
 __version__ = "1.5.0"
 
@@ -339,6 +339,49 @@ def get_station_pqr(station_name: str, rcu_mode: Union[str, int], db):
     return station_pqr.astype('float32')
 
 
+def get_station_xyz(station_name: str, rcu_mode: Union[str, int], db):
+    """
+    Get XYZ coordinates for the relevant subset of antennas in a station.
+    The XYZ system is defined as the PQR system rotated along the R axis to make
+    the Q-axis point towards local north.
+
+    Args:
+        station_name: Station name, e.g. 'DE603LBA' or 'DE603'
+        rcu_mode: RCU mode (0 - 6, can be string)
+        db: instance of LofarAntennaDatabase from lofarantpos
+
+    Returns:
+        np.array: Antenna xyz, shape [n_ant, 3]
+        np.array: rotation matrix pqr_to_xyz, shape [3, 3]
+
+    Example:
+        >>> from lofarantpos.db import LofarAntennaDatabase
+        >>> db = LofarAntennaDatabase()
+        >>> xyz, _ = get_station_xyz("DE603", "outer", db)
+        >>> xyz.shape
+        (96, 3)
+        >>> f"{xyz[0, 0]:.7f}"
+        '2.7033776'
+
+        >>> xyz, _ = get_station_xyz("LV614", "5", db)
+        >>> xyz.shape
+        (96, 3)
+    """
+    station_pqr = get_station_pqr(station_name, rcu_mode, db)
+
+    station_name = get_full_station_name(station_name, rcu_mode)
+
+    rotation = db.rotation_from_north(station_name)
+
+    pqr_to_xyz = np.array([[np.cos(-rotation), -np.sin(-rotation), 0],
+                           [np.sin(-rotation), np.cos(-rotation), 0],
+                           [0, 0, 1]])
+
+    station_xyz = (pqr_to_xyz @ station_pqr.T).T
+
+    return station_xyz, pqr_to_xyz
+
+
 def make_ground_plot(image: np.ndarray, background_map: np.ndarray, extent: List[float], title: str = "Ground plot",
         subtitle: str = "", opacity: float = 0.6, fig: Figure = None, draw_contours: bool = True, **kwargs) \
         -> Tuple[Figure, np.ndarray]:
@@ -348,6 +391,7 @@ def make_ground_plot(image: np.ndarray, background_map: np.ndarray, extent: List
     Args:
         image: numpy array (two dimensions with data)
         background_map: background map
+        extent: extent in metres
         title: Title for the plot
         subtitle: Subtitle for the plot
         opacity: maximum opacity of the plot
@@ -541,7 +585,6 @@ def get_extent_lonlat(extent_m: List[int],
 
     pmin, qmin, _ = pqr_to_xyz.T @ (np.array([extent_m[0], extent_m[2], 0]))
     pmax, qmax, _ = pqr_to_xyz.T @ (np.array([extent_m[1], extent_m[3], 0]))
-    lon_center, lat_center, _ = lofargeotiff.pqr_to_longlatheight([0, 0, 0], full_station_name)
     lon_min, lat_min, _ = lofargeotiff.pqr_to_longlatheight([pmin, qmin, 0], full_station_name)
     lon_max, lat_max, _ = lofargeotiff.pqr_to_longlatheight([pmax, qmax, 0], full_station_name)
 
@@ -633,23 +676,14 @@ def make_xst_plots(xst_data: np.ndarray,
     visibilities_xx = visibilities[0::2, 0::2]
     visibilities_yy = visibilities[1::2, 1::2]
     # Stokes I
-    visibilities_stokesI = visibilities_xx + visibilities_yy
+    visibilities_stokes_i = visibilities_xx + visibilities_yy
 
     # Setup the database
     db = LofarAntennaDatabase()
 
-    station_pqr = get_station_pqr(station_name, rcu_mode, db)
+    station_xyz, pqr_to_xyz = get_station_xyz(station_name, rcu_mode, db)
 
     station_name = get_full_station_name(station_name, rcu_mode)
-
-    # Rotate station_pqr to a north-oriented xyz frame, where y points North, in a plane through the station.
-    rotation = db.rotation_from_north(station_name)
-
-    pqr_to_xyz = np.array([[np.cos(-rotation), -np.sin(-rotation), 0],
-                           [np.sin(-rotation), np.cos(-rotation), 0],
-                           [0, 0, 1]])
-
-    station_xyz = (pqr_to_xyz @ station_pqr.T).T
 
     baselines = station_xyz[:, np.newaxis, :] - station_xyz[np.newaxis, :, :]
 
@@ -679,9 +713,9 @@ def make_xst_plots(xst_data: np.ndarray,
             marked_bodies_lmn[body_name] = skycoord_to_lmn(marked_bodies[body_name], zenith)
 
     if subtract is not None:
-        visibilities_stokesI = subtract_sources(visibilities_stokesI, baselines, freq, marked_bodies_lmn, subtract)
+        visibilities_stokes_i = subtract_sources(visibilities_stokes_i, baselines, freq, marked_bodies_lmn, subtract)
 
-    sky_img = sky_imager(visibilities_stokesI, baselines, freq, npix_l, npix_m)
+    sky_img = sky_imager(visibilities_stokes_i, baselines, freq, npix_l, npix_m)
 
     marked_bodies_lmn_only3 = {k: v for (k, v) in marked_bodies_lmn.items() if k in ('Cas A', 'Cyg A', 'Sun')}
 
@@ -707,9 +741,9 @@ def make_xst_plots(xst_data: np.ndarray,
     os.environ["NUMEXPR_NUM_THREADS"] = "3"
 
     # Select a subset of visibilities, only the lower triangular part
-    baseline_indices = np.tril_indices(visibilities_stokesI.shape[0])
+    baseline_indices = np.tril_indices(visibilities_stokes_i.shape[0])
 
-    visibilities_selection = visibilities_stokesI[baseline_indices]
+    visibilities_selection = visibilities_stokes_i[baseline_indices]
 
     ground_img = nearfield_imager(visibilities_selection.flatten()[:, np.newaxis],
                                   np.array(baseline_indices).T,
@@ -791,3 +825,112 @@ def make_sky_movie(moviefilename: str, h5file: h5py.File, obsnums: List[str], vm
     ani = matplotlib.animation.ArtistAnimation(fig, ims, interval=30, blit=False, repeat_delay=1000)
     writer = matplotlib.animation.writers['ffmpeg'](fps=5, bitrate=800)
     ani.save(moviefilename, writer=writer, dpi=fig.dpi)
+
+
+def reimage_sky(h5: h5py.File, obsnum: str, db: lofarantpos.db.LofarAntennaDatabase,
+                subtract: List[str] = None, vmin: float = None, vmax: float = None):
+    """
+    Reimage the sky for one observation in an HDF5 file
+
+    Args:
+        h5 (h5py.File): HDF5 file
+        obsnum (str): observation number
+        db (lofarantpos.db.LofarAntennaDatabase): instance of lofar antenna database
+        subtract (List[str], optional): List of sources to subtract, e.g. ["Cas A", "Sun"]
+
+    Returns:
+        matplotlib.Figure
+
+    Example:
+        >>> from lofarantpos.db import LofarAntennaDatabase
+        >>> db = LofarAntennaDatabase()
+        >>> fig = reimage_sky(h5py.File("test/test.h5", "r"), "obs000002", db, subtract=["Cas A"])
+    """
+    station_name = h5[obsnum].attrs['station_name']
+    subband = h5[obsnum].attrs['subband']
+    obstime = h5[obsnum].attrs['obstime']
+    rcu_mode = h5[obsnum].attrs['rcu_mode']
+    sky_data = h5[obsnum]["sky_img"]
+    freq = h5[obsnum].attrs['frequency']
+    marked_bodies_lmn = dict(zip(h5[obsnum].attrs["source_names"], h5[obsnum].attrs["source_lmn"]))
+    visibilities = h5[obsnum]['calibrated_data'].value
+    visibilities_xx = visibilities[0::2, 0::2]
+    visibilities_yy = visibilities[1::2, 1::2]
+    # Stokes I
+    visibilities_stokes_i = visibilities_xx + visibilities_yy
+
+    if subtract is not None:
+        station_xyz, _ = get_station_xyz(station_name, rcu_mode, db)
+        baselines = station_xyz[:, np.newaxis, :] - station_xyz[np.newaxis, :, :]
+        visibilities_stokes_i = subtract_sources(visibilities_stokes_i, baselines, freq, marked_bodies_lmn, subtract)
+        sky_data = sky_imager(visibilities_stokes_i, baselines, freq, sky_data.shape[0], sky_data.shape[1])
+        if vmin is None:
+            vmin = np.quantile(sky_data, 0.05)
+
+    sky_fig = make_sky_plot(sky_data, {k: v for k, v in marked_bodies_lmn.items()},
+                            title=f"Sky image for {station_name}",
+                            subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",
+                            vmin=vmin, vmax=vmax)
+
+    return sky_fig
+
+
+def reimage_nearfield(h5: h5py.File, obsnum: str, db: lofarantpos.db.LofarAntennaDatabase, extent: List[float] = None,
+                      subtract: bool = None):
+    """
+    Reimage nearfield for ground image
+
+    Args:
+        h5 (h5py.File): HDF5 file
+        obsnum (str): observation number
+        db (lofarantpos.db.LofarAntennaDatabase): instance of lofar antenna database
+        extent (List[float], optional): Imaging extent in metres
+        subtract (List[str], optional): List of sources to subtract, e.g. ["Cas A", "Sun"]
+
+    Returns:
+        fig, leaflet map
+
+    Example:
+        >>> from lofarantpos.db import LofarAntennaDatabase
+        >>> db = LofarAntennaDatabase()
+        >>> fig = reimage_nearfield(h5py.File("test/test.h5", "r"), "obs000002", db, extent=[-500, 500, -500, 500], \
+                                    subtract=["Cas A"])
+    """
+    station_name = h5[obsnum].attrs['station_name']
+    subband = h5[obsnum].attrs['subband']
+    obstime = h5[obsnum].attrs['obstime']
+    rcu_mode = h5[obsnum].attrs['rcu_mode']
+    freq = h5[obsnum].attrs['frequency']
+    marked_bodies_lmn = dict(zip(h5[obsnum].attrs["source_names"], h5[obsnum].attrs["source_lmn"]))
+    visibilities = h5[obsnum]['calibrated_data'].value
+    visibilities_xx = visibilities[0::2, 0::2]
+    visibilities_yy = visibilities[1::2, 1::2]
+    # Stokes I
+    visibilities_stokes_i = visibilities_xx + visibilities_yy
+
+    if subtract is not None:
+        station_xyz, _ = get_station_xyz(station_name, rcu_mode, db)
+        baselines = station_xyz[:, np.newaxis, :] - station_xyz[np.newaxis, :, :]
+        visibilities_stokes_i = subtract_sources(visibilities_stokes_i, baselines, freq, marked_bodies_lmn, subtract)
+
+    baseline_indices = np.tril_indices(visibilities_stokes_i.shape[0])
+    visibilities_selection = visibilities_stokes_i[baseline_indices]
+
+    extent_lonlat = get_extent_lonlat(extent, get_full_station_name(station_name, h5[obsnum].attrs['rcu_mode']), db)
+
+    background_map = get_map(*extent_lonlat, 14)
+
+    ground_img = nearfield_imager(visibilities_selection.flatten()[:, np.newaxis],
+                                  np.array(baseline_indices).T, [freq],
+                                  600, 600, extent,
+                                  get_station_pqr(h5[obsnum].attrs["station_name"], h5[obsnum].attrs["rcu_mode"], db))
+    ground_img = np.real(2 * ground_img)
+
+    fig, folium_overlay = make_ground_plot(ground_img, background_map, extent, draw_contours=False, opacity=0.3,
+                                           title=f"Near field image for {station_name}",
+                                           subtitle=f"SB {subband} ({freq / 1e6:.1f} MHz), {str(obstime)[:16]}",)
+
+    leaflet_map = make_leaflet_map(folium_overlay, *(extent_lonlat[1:3]),
+                                   extent_lonlat[0], extent_lonlat[2], extent_lonlat[1], extent_lonlat[3])
+
+    return fig, leaflet_map
