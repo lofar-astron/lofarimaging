@@ -151,7 +151,13 @@ def calibrate(vis, modelvis, maxiter=30, amplitudeonly=True):
     """
     nst = vis.shape[1]
     ndir = np.array(modelvis).shape[0]
-    gains = np.ones([ndir, nst], dtype=np.complex) * np.sqrt(norm(vis) / norm(modelvis))
+    gains = np.ones([ndir, nst], dtype=np.complex)
+
+    if ndir == 0:
+        return vis, gains
+    else:
+         gains *= np.sqrt(norm(vis) / norm(modelvis))
+
     iteration = 0
     while iteration < maxiter:
         iteration += 1
