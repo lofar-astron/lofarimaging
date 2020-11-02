@@ -150,6 +150,10 @@ def find_caltable(field_name: str, rcu_mode: Union[str, int], caltable_dir='calt
         filename += "-HBA-170_230.dat"
     elif str(rcu_mode) == '7':
         filename += "-HBA-210_250.dat"
+    elif str(rcu_mode) == 'sparse_even':
+        filename += "-LBA_SPARSE_EVEN-10_90.dat"
+    elif str(rcu_mode) == 'sparse_odd':
+        filename += "-LBA_SPARSE_ODD-10_90.dat"
     else:
         raise RuntimeError("Unexpected mode: " + str(rcu_mode) + " for field_name " + str(field_name))
 
@@ -317,15 +321,24 @@ def get_station_pqr(station_name: str, rcu_mode: Union[str, int], db):
     full_station_name = get_full_station_name(station_name, rcu_mode)
     station_type = get_station_type(full_station_name)
 
-    if 'LBA' in station_name or str(rcu_mode) in ('1', '2', '3', '4', 'inner', 'outer'):
-        # Get the PQR positions for an individual station
-        station_pqr = db.antenna_pqr(full_station_name)
-
-        # Exception: for Dutch stations (sparse not yet accommodated)
-        if (station_type == 'core' or station_type == 'remote') and int(rcu_mode) in (3, 4):
-            station_pqr = station_pqr[0:48, :]
-        elif (station_type == 'core' or station_type == 'remote') and int(rcu_mode) in (1, 2):
-            station_pqr = station_pqr[48:, :]
+    if 'LBA' in station_name or str(rcu_mode) in ('1', '2', '3', '4', 'inner', 'outer', 'sparse_even', 'sparse_odd', 'sparse'):
+        if (station_type == 'core' or station_type == 'remote'):
+            if str(rcu_mode) in ('3', '4', 'inner'):
+                station_pqr = db.antenna_pqr(full_station_name)[0:48, :]
+            elif str(rcu_mode) in ('1', '2', 'outer'):
+                station_pqr = db.antenna_pqr(full_station_name)[48:, :]
+            elif rcu_mode in ('sparse_even', 'sparse'):
+                all_pqr = db.antenna_pqr(full_station_name)
+                # Indices 0, 48, 2, 50, 4, 52, ...
+                station_pqr = np.ravel(np.column_stack((all_pqr[:48:2], all_pqr[48::2]))).reshape(48, 3)
+            elif rcu_mode == 'sparse_odd':
+                all_pqr = db.antenna_pqr(full_station_name)
+                # Indices 1, 49, 3, 51, 5, 53, ...
+                station_pqr = np.ravel(np.column_stack((all_pqr[1:48:2], all_pqr[49::2]))).reshape(48, 3)
+            else:
+                raise RuntimeError("Cannot select subset of LBA antennas for mode " + rcu_mode)
+        else:
+            station_pqr = db.antenna_pqr(full_station_name)
     elif 'HBA' in station_name or str(rcu_mode) in ('5', '6', '7', '8'):
         selected_dipole_config = {
             'intl': GENERIC_INT_201512, 'remote': GENERIC_REMOTE_201512, 'core': GENERIC_CORE_201512
@@ -549,14 +562,13 @@ def get_full_station_name(station_name: str, rcu_mode: Union[str, int]) -> str:
         return station_name
 
     if str(rcu_mode) in ('1', '2', 'outer'):
-        if len(station_name) == 5:
-            station_name += "LBA"
+        station_name += "LBA"
     elif str(rcu_mode) in ('3', '4', 'inner'):
-        if len(station_name) == 5:
-            station_name += "LBA"
+        station_name += "LBA"
+    elif 'sparse' in str(rcu_mode):
+        station_name += "LBA"
     elif str(rcu_mode) in ('5', '6', '7'):
-        if len(station_name) == 5:
-            station_name += "HBA"
+        station_name += "HBA"
     else:
         raise Exception("Unexpected rcu_mode: ", rcu_mode)
 
