@@ -865,7 +865,7 @@ def reimage_sky(h5: h5py.File, obsnum: str, db: lofarantpos.db.LofarAntennaDatab
     sky_data = h5[obsnum]["sky_img"]
     freq = h5[obsnum].attrs['frequency']
     marked_bodies_lmn = dict(zip(h5[obsnum].attrs["source_names"], h5[obsnum].attrs["source_lmn"]))
-    visibilities = h5[obsnum]['calibrated_data'].value
+    visibilities = h5[obsnum]['calibrated_data'][:]
     visibilities_xx = visibilities[0::2, 0::2]
     visibilities_yy = visibilities[1::2, 1::2]
     # Stokes I
@@ -914,7 +914,7 @@ def reimage_nearfield(h5: h5py.File, obsnum: str, db: lofarantpos.db.LofarAntenn
     rcu_mode = h5[obsnum].attrs['rcu_mode']
     freq = h5[obsnum].attrs['frequency']
     marked_bodies_lmn = dict(zip(h5[obsnum].attrs["source_names"], h5[obsnum].attrs["source_lmn"]))
-    visibilities = h5[obsnum]['calibrated_data'].value
+    visibilities = h5[obsnum]['calibrated_data'][:]
     visibilities_xx = visibilities[0::2, 0::2]
     visibilities_yy = visibilities[1::2, 1::2]
     # Stokes I
