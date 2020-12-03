@@ -100,16 +100,18 @@ def freq_from_sb(sb: int, rcu_mode: Union[str, int] = 1):
         58007812.5
     """
     clock = 200e6
-    if int(rcu_mode) == 6:
-        clock = 160e6
-
     freq_offset = 0
-    if int(rcu_mode) == 5:
-        freq_offset = 100e6
-    elif int(rcu_mode) == 6:
-        freq_offset = 160e6
-    elif int(rcu_mode) == 7:
-        freq_offset = 200e6
+
+    if 'sparse' not in str(rcu_mode):
+        if int(rcu_mode) == 6:
+            clock = 160e6
+
+        if int(rcu_mode) == 5:
+            freq_offset = 100e6
+        elif int(rcu_mode) == 6:
+            freq_offset = 160e6
+        elif int(rcu_mode) == 7:
+            freq_offset = 200e6
 
     sb_bandwidth = 0.5 * clock / 512.
     freq = (sb * sb_bandwidth) + freq_offset
@@ -150,6 +152,10 @@ def find_caltable(field_name: str, rcu_mode: Union[str, int], caltable_dir='calt
         filename += "-HBA-170_230.dat"
     elif str(rcu_mode) == '7':
         filename += "-HBA-210_250.dat"
+    elif str(rcu_mode) == 'sparse_even':
+        filename += "-LBA_SPARSE_EVEN-10_90.dat"
+    elif str(rcu_mode) == 'sparse_odd':
+        filename += "-LBA_SPARSE_ODD-10_90.dat"
     else:
         raise RuntimeError("Unexpected mode: " + str(rcu_mode) + " for field_name " + str(field_name))
 
@@ -317,15 +323,24 @@ def get_station_pqr(station_name: str, rcu_mode: Union[str, int], db):
     full_station_name = get_full_station_name(station_name, rcu_mode)
     station_type = get_station_type(full_station_name)
 
-    if 'LBA' in station_name or str(rcu_mode) in ('1', '2', '3', '4', 'inner', 'outer'):
-        # Get the PQR positions for an individual station
-        station_pqr = db.antenna_pqr(full_station_name)
-
-        # Exception: for Dutch stations (sparse not yet accommodated)
-        if (station_type == 'core' or station_type == 'remote') and int(rcu_mode) in (3, 4):
-            station_pqr = station_pqr[0:48, :]
-        elif (station_type == 'core' or station_type == 'remote') and int(rcu_mode) in (1, 2):
-            station_pqr = station_pqr[48:, :]
+    if 'LBA' in station_name or str(rcu_mode) in ('1', '2', '3', '4', 'inner', 'outer', 'sparse_even', 'sparse_odd', 'sparse'):
+        if (station_type == 'core' or station_type == 'remote'):
+            if str(rcu_mode) in ('3', '4', 'inner'):
+                station_pqr = db.antenna_pqr(full_station_name)[0:48, :]
+            elif str(rcu_mode) in ('1', '2', 'outer'):
+                station_pqr = db.antenna_pqr(full_station_name)[48:, :]
+            elif rcu_mode in ('sparse_even', 'sparse'):
+                all_pqr = db.antenna_pqr(full_station_name)
+                # Indices 0, 49, 2, 51, 4, 53, ...
+                station_pqr = np.ravel(np.column_stack((all_pqr[:48:2], all_pqr[49::2]))).reshape(48, 3)
+            elif rcu_mode == 'sparse_odd':
+                all_pqr = db.antenna_pqr(full_station_name)
+                # Indices 1, 48, 3, 50, 5, 52, ...
+                station_pqr = np.ravel(np.column_stack((all_pqr[1:48:2], all_pqr[48::2]))).reshape(48, 3)
+            else:
+                raise RuntimeError("Cannot select subset of LBA antennas for mode " + rcu_mode)
+        else:
+            station_pqr = db.antenna_pqr(full_station_name)
     elif 'HBA' in station_name or str(rcu_mode) in ('5', '6', '7', '8'):
         selected_dipole_config = {
             'intl': GENERIC_INT_201512, 'remote': GENERIC_REMOTE_201512, 'core': GENERIC_CORE_201512
@@ -549,14 +564,13 @@ def get_full_station_name(station_name: str, rcu_mode: Union[str, int]) -> str:
         return station_name
 
     if str(rcu_mode) in ('1', '2', 'outer'):
-        if len(station_name) == 5:
-            station_name += "LBA"
+        station_name += "LBA"
     elif str(rcu_mode) in ('3', '4', 'inner'):
-        if len(station_name) == 5:
-            station_name += "LBA"
+        station_name += "LBA"
+    elif 'sparse' in str(rcu_mode):
+        station_name += "LBA"
     elif str(rcu_mode) in ('5', '6', '7'):
-        if len(station_name) == 5:
-            station_name += "HBA"
+        station_name += "HBA"
     else:
         raise Exception("Unexpected rcu_mode: ", rcu_mode)
 
@@ -645,6 +659,14 @@ def make_xst_plots(xst_data: np.ndarray,
 
         >>> type(leafletmap)
         <class 'folium.folium.Map'>
+
+        >>> xst_data = read_acm_cube("test/20170621_072634_sb350_xst.dat", "remote")[0]
+        >>> obstime = datetime.datetime(2017, 6, 21, 7, 26, 34)
+        >>> sky_fig, ground_fig, leafletmap = make_xst_plots(xst_data, "RS509", obstime, 350, \
+                                                             'sparse_even', \
+                                                             caltable_dir="test/CalTables", \
+                                                             hdf5_filename="test/test.h5")
+        Maximum at 2m east, -2m north of station center (lat/long 53.40884, 6.78531)
     """
     if extent is None:
         extent = [-150, 150, -150, 150]
@@ -853,7 +875,7 @@ def reimage_sky(h5: h5py.File, obsnum: str, db: lofarantpos.db.LofarAntennaDatab
     sky_data = h5[obsnum]["sky_img"]
     freq = h5[obsnum].attrs['frequency']
     marked_bodies_lmn = dict(zip(h5[obsnum].attrs["source_names"], h5[obsnum].attrs["source_lmn"]))
-    visibilities = h5[obsnum]['calibrated_data'].value
+    visibilities = h5[obsnum]['calibrated_data'][:]
     visibilities_xx = visibilities[0::2, 0::2]
     visibilities_yy = visibilities[1::2, 1::2]
     # Stokes I
@@ -902,7 +924,7 @@ def reimage_nearfield(h5: h5py.File, obsnum: str, db: lofarantpos.db.LofarAntenn
     rcu_mode = h5[obsnum].attrs['rcu_mode']
     freq = h5[obsnum].attrs['frequency']
     marked_bodies_lmn = dict(zip(h5[obsnum].attrs["source_names"], h5[obsnum].attrs["source_lmn"]))
-    visibilities = h5[obsnum]['calibrated_data'].value
+    visibilities = h5[obsnum]['calibrated_data'][:]
     visibilities_xx = visibilities[0::2, 0::2]
     visibilities_yy = visibilities[1::2, 1::2]
     # Stokes I
