@@ -331,11 +331,11 @@ def get_station_pqr(station_name: str, rcu_mode: Union[str, int], db):
                 station_pqr = db.antenna_pqr(full_station_name)[48:, :]
             elif rcu_mode in ('sparse_even', 'sparse'):
                 all_pqr = db.antenna_pqr(full_station_name)
-                # Indices 0, 48, 2, 50, 4, 52, ...
+                # Indices 0, 49, 2, 51, 4, 53, ...
                 station_pqr = np.ravel(np.column_stack((all_pqr[:48:2], all_pqr[49::2]))).reshape(48, 3)
             elif rcu_mode == 'sparse_odd':
                 all_pqr = db.antenna_pqr(full_station_name)
-                # Indices 1, 49, 3, 51, 5, 53, ...
+                # Indices 1, 48, 3, 50, 5, 52, ...
                 station_pqr = np.ravel(np.column_stack((all_pqr[1:48:2], all_pqr[48::2]))).reshape(48, 3)
             else:
                 raise RuntimeError("Cannot select subset of LBA antennas for mode " + rcu_mode)
