@@ -100,16 +100,18 @@ def freq_from_sb(sb: int, rcu_mode: Union[str, int] = 1):
         58007812.5
     """
     clock = 200e6
-    if int(rcu_mode) == 6:
-        clock = 160e6
-
     freq_offset = 0
-    if int(rcu_mode) == 5:
-        freq_offset = 100e6
-    elif int(rcu_mode) == 6:
-        freq_offset = 160e6
-    elif int(rcu_mode) == 7:
-        freq_offset = 200e6
+
+    if 'sparse' not in str(rcu_mode):
+        if int(rcu_mode) == 6:
+            clock = 160e6
+
+        if int(rcu_mode) == 5:
+            freq_offset = 100e6
+        elif int(rcu_mode) == 6:
+            freq_offset = 160e6
+        elif int(rcu_mode) == 7:
+            freq_offset = 200e6
 
     sb_bandwidth = 0.5 * clock / 512.
     freq = (sb * sb_bandwidth) + freq_offset
@@ -657,6 +659,14 @@ def make_xst_plots(xst_data: np.ndarray,
 
         >>> type(leafletmap)
         <class 'folium.folium.Map'>
+
+        >>> xst_data = read_acm_cube("test/20170621_072634_sb350_xst.dat", "remote")[0]
+        >>> obstime = datetime.datetime(2017, 6, 21, 7, 26, 34)
+        >>> sky_fig, ground_fig, leafletmap = make_xst_plots(xst_data, "RS509", obstime, 350, \
+                                                             'sparse_even', \
+                                                             caltable_dir="test/CalTables", \
+                                                             hdf5_filename="test/test.h5")
+        Maximum at 2m east, -2m north of station center (lat/long 53.40884, 6.78531)
     """
     if extent is None:
         extent = [-150, 150, -150, 150]

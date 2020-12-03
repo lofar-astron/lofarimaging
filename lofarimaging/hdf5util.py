@@ -101,6 +101,9 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
     """
     short_station_name = station_name[:5]
 
+    if subtracted is None:
+        subtracted = []
+
     with h5py.File(filename, 'a') as h5file:
         new_obsname = get_new_obsname(h5file)
         obs_group = h5file.create_group(new_obsname)
