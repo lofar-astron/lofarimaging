@@ -149,7 +149,7 @@ def calibrate(vis, modelvis, maxiter=30, amplitudeonly=True):
     """
     nst = vis.shape[1]
     ndir = np.array(modelvis).shape[0]
-    gains = np.ones([ndir, nst], dtype=np.complex)
+    gains = np.ones([ndir, nst], dtype=np.complex128)
 
     if ndir == 0:
         return vis, gains
@@ -164,7 +164,7 @@ def calibrate(vis, modelvis, maxiter=30, amplitudeonly=True):
             z = np.conj(gains_prev) * np.array(modelvis)[:, :, k]
             gains[:, k] = lstsq(z.T, vis[:, k], rcond=None)[0]
         if amplitudeonly:
-            gains = np.abs(gains).astype(np.complex)
+            gains = np.abs(gains).astype(np.complex128)
         if iteration % 2 == 0 and iteration > 0:
             dg = norm(gains - gains_prev)
             residual = vis.copy()
