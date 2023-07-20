@@ -1,6 +1,5 @@
 numpy
 numexpr
-numba
 astropy
 lofargeotiff
 lofarantpos>=0.4.0
