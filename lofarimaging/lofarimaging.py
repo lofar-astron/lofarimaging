@@ -8,7 +8,7 @@ import numba
 from astropy.coordinates import SkyCoord, SkyOffsetFrame, CartesianRepresentation
 
 
-__all__ = ["nearfield_imager", "sky_imager", "ground_imager", "skycoord_to_lmn", "calibrate", "simulate_sky_source",
+__all__ = ["nearfield_imager", "sky_imager", "numba_sky_imager", "ground_imager", "skycoord_to_lmn", "calibrate", "simulate_sky_source",
            "subtract_sources"]
 
 __version__ = "1.5.0"
@@ -40,8 +40,34 @@ def skycoord_to_lmn(pos: SkyCoord, phasecentre: SkyCoord):
     return dc.y.value, dc.z.value, dc.x.value - 1
 
 
-@numba.jit(parallel=True)
 def sky_imager(visibilities, baselines, freq, npix_l, npix_m):
+    """
+    Sky imager
+
+    Args:
+        visibilities: Numpy array with visibilities, shape [num_antennas x num_antennas]
+        baselines: Numpy array with distances between antennas, shape [num_antennas, num_antennas, 3]
+        freq: frequency
+        npix_l: Number of pixels in l-direction
+        npix_m: Number of pixels in m-direction
+
+    Returns:
+        np.array(float): Real valued array of shape [npix_l, npix_m]
+    """
+    img = np.zeros((npix_m, npix_l), dtype=np.complex128)
+
+    for m_ix in range(npix_m):
+        m = -1 + m_ix * 2 / npix_m
+        for l_ix in range(npix_l):
+            l = 1 - l_ix * 2 / npix_l
+            img[m_ix, l_ix] = np.mean(visibilities * np.exp(-2j * np.pi * freq *
+                                                            (baselines[:, :, 0] * l + baselines[:, :, 1] * m) /
+                                                            SPEED_OF_LIGHT))
+    return np.real(img)
+
+
+@numba.jit(parallel=True)
+def numba_sky_imager(visibilities, baselines, freq, npix_l, npix_m):
     """
     Sky imager
 
