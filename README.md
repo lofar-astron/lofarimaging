@@ -8,16 +8,16 @@ Much of the code in this repository was originally written by Vanessa Moss (http
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/lofar-astron/lofarimaging/master?filepath=lofarimaging.ipynb)
 
 ### Installation
-Download or clone this repository. To install, run
+This repository can be cloned and installed by running pip,
+```
+>>> python3 -m pip install git+https://github.com/lofar-astron/lofarimaging.git
+```
+Or for development, you can clone this repository and install it manually.
 
 ```
->>> python setup.py develop
-```
-
-Alternatively, install just the external requirements with
-
-```
->>> pip install -r requirements.txt
+>>> git clone git@github.com:lofar-astron/lofarimaging.git
+>>> cd lofarimaging
+>>> python3 -m pip install -e .
 ```
 
 If you want to use calibration tables, download them from ASTRON, e.g. through

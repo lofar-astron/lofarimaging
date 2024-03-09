@@ -441,8 +441,7 @@ def make_ground_plot(image: np.ndarray, background_map: np.ndarray, extent: List
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.2, axes_class=maxes.Axes)
     cbar = fig.colorbar(cimg, cax=cax, orientation="vertical", format="%.2e")
-    cbar.set_alpha(1.0)
-    cbar.draw_all()
+    cbar.solids.set(alpha=1.0)
     # cbar.set_ticks([])
 
     ax.set_xlabel('$W-E$ (metres)', fontsize=14)
@@ -710,11 +709,12 @@ def make_xst_plots(xst_data: np.ndarray,
     baselines = station_xyz[:, np.newaxis, :] - station_xyz[np.newaxis, :, :]
 
     obstime_astropy = Time(obstime)
-    # Determine positions of Cas A and Cyg A
     station_earthlocation = EarthLocation.from_geocentric(*(db.phase_centres[station_name] * u.m))
+    gcrs_instance = GCRS(obstime = obstime_astropy)
     zenith = AltAz(az=0 * u.deg, alt=90 * u.deg, obstime=obstime_astropy,
-                   location=station_earthlocation).transform_to(GCRS)
+                   location=station_earthlocation).transform_to(gcrs_instance)
 
+    # Determine positions of potential sources of strong emission
     marked_bodies = {
         'Cas A': SkyCoord(ra=350.85 * u.deg, dec=58.815 * u.deg),
         'Cyg A': SkyCoord(ra=299.86815191 * u.deg, dec=40.73391574 * u.deg),
@@ -723,8 +723,8 @@ def make_xst_plots(xst_data: np.ndarray,
         'Cen A': SkyCoord(ra=201.36506288*u.deg, dec=-43.01911267*u.deg),
         'Vir A': SkyCoord(ra=187.70593076*u.deg, dec=12.39112329*u.deg),
         '3C295': SkyCoord(ra=212.83527917*u.deg, dec=52.20264444*u.deg),
-        'Moon': get_moon(obstime_astropy, location=station_earthlocation).transform_to(GCRS),
-        'Sun': get_sun(obstime_astropy),
+        'Moon': get_moon(time=obstime_astropy, location=station_earthlocation).transform_to(gcrs_instance),
+        'Sun': get_sun(time=obstime_astropy).transform_to(gcrs_instance),
         '3C196': SkyCoord(ra=123.40023371*u.deg, dec=48.21739888*u.deg)
     }
 

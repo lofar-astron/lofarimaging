@@ -92,8 +92,8 @@ def write_hdf5(filename: str, xst_data: np.ndarray, visibilities: np.ndarray, sk
         None
 
     Example:
-        >>> xst_data = visibilities = np.ones((96, 96), dtype=np.complex)
-        >>> ground_img = sky_img = np.ones((131, 131), dtype=np.float)
+        >>> xst_data = visibilities = np.ones((96, 96), dtype=np.complex128)
+        >>> ground_img = sky_img = np.ones((131, 131), dtype=np.float64)
         >>> write_hdf5("test/test.h5", xst_data, visibilities, sky_img, ground_img, "DE603", \
                        297, 3, 150e6, datetime.datetime.now(), [-150, 150, -150, 150], \
                        [11.709, 11.713, 50.978, 50.981], 1.5, {'Cas A': (0.3, 0.5, 0.2)}, \
