@@ -6,7 +6,6 @@ import time
 from lofarimaging.opc_interface import download_xst
 from lofarimaging import make_xst_plots
 import threading
-import sys
 import matplotlib.pyplot as plt
 import logging
 

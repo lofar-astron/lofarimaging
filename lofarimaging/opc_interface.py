@@ -1,6 +1,4 @@
-import logging
-
-from opcua import ua, uamethod, Server, Client
+from opcua import Client
 import numpy as np
 
 DEFAULT_URI = "http://lofar.eu"
@@ -26,7 +24,7 @@ def download_xst(subband: int, integration_time_s: int, url: str = 'localhost', 
     client = Client("opc.tcp://{}:{}/".format(url, port), timeout=1000)
     client.connect()
     client.load_type_definitions()
-    objects = client.get_objects_node()
+    # objects = client.get_objects_node()
     idx = client.get_namespace_index(DEFAULT_URI)
     obj = client.get_root_node().get_child(["0:Objects",
                                             "{}:StationMetrics".format(idx),
