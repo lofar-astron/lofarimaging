@@ -19,7 +19,7 @@ from matplotlib.patches import Circle
 import matplotlib.axes as maxes
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, get_sun, get_moon
+from astropy.coordinates import SkyCoord, GCRS, EarthLocation, AltAz, get_sun, get_body
 import astropy.units as u
 from astropy.time import Time
 
@@ -723,7 +723,7 @@ def make_xst_plots(xst_data: np.ndarray,
         'Cen A': SkyCoord(ra=201.36506288*u.deg, dec=-43.01911267*u.deg),
         'Vir A': SkyCoord(ra=187.70593076*u.deg, dec=12.39112329*u.deg),
         '3C295': SkyCoord(ra=212.83527917*u.deg, dec=52.20264444*u.deg),
-        'Moon': get_moon(time=obstime_astropy, location=station_earthlocation).transform_to(gcrs_instance),
+        'Moon': get_body(body = "MOON", time=obstime_astropy, location=station_earthlocation).transform_to(gcrs_instance),
         'Sun': get_sun(time=obstime_astropy).transform_to(gcrs_instance),
         '3C196': SkyCoord(ra=123.40023371*u.deg, dec=48.21739888*u.deg)
     }
