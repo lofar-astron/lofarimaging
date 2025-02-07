@@ -10,7 +10,7 @@ import mercantile
 
 __all__ = ["get_map", "make_leaflet_map"]
 
-__version__ = "1.5.0"
+__version__ = "1.5.1"
 
 
 def get_map(lon_min, lon_max, lat_min, lat_max, zoom=19):

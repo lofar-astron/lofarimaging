@@ -37,7 +37,7 @@ __all__ = ["sb_from_freq", "freq_from_sb", "find_caltable", "read_caltable",
            "make_sky_plot", "make_ground_plot", "make_xst_plots", "apply_calibration",
            "get_full_station_name", "get_extent_lonlat", "make_sky_movie", "reimage_sky"]
 
-__version__ = "1.5.0"
+__version__ = "1.5.1"
 
 # Configurations for HBA observations with a single dipole activated per tile.
 GENERIC_INT_201512 = [0, 5, 3, 1, 8, 3, 12, 15, 10, 13, 11, 5, 12, 12, 5, 2, 10, 8, 0, 3, 5, 1, 4, 0, 11, 6, 2, 4, 9,

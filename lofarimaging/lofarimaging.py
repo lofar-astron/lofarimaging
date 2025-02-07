@@ -11,7 +11,7 @@ from astropy.coordinates import SkyCoord, SkyOffsetFrame, CartesianRepresentatio
 __all__ = ["nearfield_imager", "sky_imager", "ground_imager", "skycoord_to_lmn", "calibrate", "simulate_sky_source",
            "subtract_sources"]
 
-__version__ = "1.5.0"
+__version__ = "1.5.1"
 SPEED_OF_LIGHT = 299792458.0
 
 
